@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>Edit Profile FB</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header>
+    <strong>Edit Profile FB</strong>
+    <span id="where" class="muted">…</span>
+  </header>
+
+  <nav>
+    <button data-tab="nguon" class="on">1. Bài nguồn</button>
+    <button data-tab="goi">2. Gói bài</button>
+    <button data-tab="thay">3. Thay bài</button>
+    <button data-tab="bio">4. Tiểu sử</button>
+    <button data-tab="cai">Cài đặt</button>
+  </nav>
+
+  <section id="nguon" class="on">
+    <p class="muted">Mở trang cá nhân <b>nick cũ</b> (Emily, Gracie, Cathie, Lily…) ở tab đang xem, rồi bấm Quét.</p>
+    <button id="scanSrc">Quét bài trên trang này</button>
+    <ul id="srcList" class="list"></ul>
+  </section>
+
+  <section id="goi">
+    <p class="muted">Mỗi gói = chữ đã làm sạch + ảnh gốc. Sửa chữ trực tiếp nếu cần. Gói đã dùng được đánh dấu, tránh đăng trùng giữa các nick.</p>
+    <div id="packs"></div>
+  </section>
+
+  <section id="thay">
+    <p class="muted">Bước 1: mở Nhật ký bài viết của <b>nick mới</b> để thấy hết bài, không sót.</p>
+    <button id="openLog">Mở Nhật ký bài viết của nick này</button>
+    <button id="scanLog">Quét danh sách bài</button>
+    <table id="logTable"></table>
+    <hr>
+    <p class="muted">Bước 2: mở bài cần thay (bấm “Mở” ở trên), chọn gói, bấm Thay.</p>
+    <label>Gói bài <select id="packPick"></select></label>
+    <label class="row"><input type="checkbox" id="autoSave"> Tự bấm Lưu (mặc định: dừng trước nút Lưu để kiểm tra)</label>
+    <button id="doReplace" class="primary">Thay bài đang mở bằng gói đã chọn</button>
+  </section>
+
+  <section id="bio">
+    <p class="muted">Mở trang cá nhân của chính nick này. Tối đa 101 ký tự.</p>
+    <textarea id="bioText" rows="3"></textarea>
+    <div class="muted"><span id="bioCount">0</span>/101 · <a href="#" id="bioTpl">dùng mẫu</a></div>
+    <label class="row"><input type="checkbox" id="bioAuto"> Tự bấm Lưu</label>
+    <button id="doBio" class="primary">Điền tiểu sử</button>
+    <details>
+      <summary>Mẫu cho phần Giới thiệu (chép tay)</summary>
+      <div id="introTpl" class="tpl"></div>
+    </details>
+  </section>
+
+  <section id="cai">
+    <label>Tên smock của nick này (vd Olivia) <input id="nickName"></label>
+    <label>Số WhatsApp chung <input id="wa"></label>
+    <label>Tên các nick cũ (cách nhau dấu phẩy) <input id="oldNames"></label>
+    <label>Link fanpage <input id="fanpageUrl"></label>
+    <label>Quy tắc riêng (mỗi dòng: <code>biểu thức =&gt; thay bằng</code>)
+      <textarea id="custom" rows="4" placeholder="Smock Lily =&gt; K-Embroidery"></textarea></label>
+    <button id="saveCfg" class="primary">Lưu cài đặt</button>
+    <p class="muted">Đổi số WhatsApp phải hỏi người phụ trách trước. Cài đặt lưu riêng theo từng profile Chrome.</p>
+  </section>
+
+  <footer><div id="log"></div></footer>
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

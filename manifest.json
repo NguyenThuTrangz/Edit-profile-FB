@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Edit Profile FB – chuẩn hoá nick SM",
+  "version": "1.0.0",
+  "description": "Bán tự động thay bài cũ, sửa tiểu sử cho nick Facebook mới theo bài mẫu của nick cũ. Người dùng duyệt và bấm Lưu.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "sidePanel", "unlimitedStorage", "tabs", "scripting"],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://web.facebook.com/*",
+    "https://*.fbcdn.net/*"
+  ],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": { "default_title": "Mở bảng Edit Profile FB" },
+  "icons": { "128": "icon.png" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.facebook.com/*", "https://web.facebook.com/*"],
+      "js": ["fb-content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
