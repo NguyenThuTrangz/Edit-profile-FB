@@ -68,6 +68,7 @@ export function cleanCaption(input, opt = {}) {
   for (const n of o.oldNames) if (new RegExp(`\\b${esc(n)}\\b`, 'i').test(t)) warnings.push(`Còn chữ "${n}" (tên nick cũ) — kiểm tra lại.`);
   for (const m of t.matchAll(/\+?\d[\d\s.\-]{8,}\d/g)) if (digits(m[0]).length >= 9 && digits(m[0]) !== waDigits) warnings.push(`Còn số lạ "${m[0].trim()}".`);
   if (/@[\w.\-]+\.(com|net|vn)\b/i.test(t)) warnings.push('Còn địa chỉ email trong bài.');
+  for (const m of t.matchAll(/\b(code\s+)?K\d{3,4}\b/g)) warnings.push(`Còn mã bài "${m[0]}" — mã Kxxx không được có trong caption.`);
   return { text: t.replace(/\n{3,}/g, '\n\n').trim(), changes: [...new Set(changes)], warnings: [...new Set(warnings)] };
 }
 

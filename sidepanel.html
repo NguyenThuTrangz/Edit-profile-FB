@@ -15,7 +15,7 @@
     <button data-tab="nguon" class="on">1. Bài nguồn</button>
     <button data-tab="goi">2. Gói bài</button>
     <button data-tab="thay">3. Thay bài</button>
-    <button data-tab="bio">4. Tiểu sử</button>
+    <button data-tab="bio">4. Hồ sơ</button>
     <button data-tab="cai">Cài đặt</button>
   </nav>
 
@@ -23,6 +23,16 @@
     <p class="muted">Mở trang cá nhân <b>nick cũ</b> (Emily, Gracie, Cathie, Lily…) ở tab đang xem, rồi bấm Quét.</p>
     <button id="scanSrc">Quét bài trên trang này</button>
     <ul id="srcList" class="list"></ul>
+    <hr>
+    <details id="khoBox">
+      <summary><b>Hoặc lấy từ kho content (Google Sheet)</b></summary>
+      <p class="muted">Sheet và folder ảnh phải để “Bất kỳ ai có đường liên kết”. Không cần mở tab nào.</p>
+      <label>Link hoặc ID sheet <input id="khoSheet"></label>
+      <label>Tab <input id="khoTab" list="khoTabs" placeholder="GRACIE"></label>
+      <datalist id="khoTabs"></datalist>
+      <button id="khoLoad">Tải danh sách bài</button>
+      <ul id="khoList" class="list"></ul>
+    </details>
   </section>
 
   <section id="goi">
@@ -48,10 +58,21 @@
     <div class="muted"><span id="bioCount">0</span>/101 · <a href="#" id="bioTpl">dùng mẫu</a></div>
     <label class="row"><input type="checkbox" id="bioAuto"> Tự bấm Lưu</label>
     <button id="doBio" class="primary">Điền tiểu sử</button>
-    <details>
-      <summary>Mẫu cho phần Giới thiệu (chép tay)</summary>
-      <div id="introTpl" class="tpl"></div>
-    </details>
+    <hr>
+    <p><b>Giới thiệu</b> <span class="muted">— mục nào đã có thì bỏ qua. Mỗi mục extension tự mở đúng trang, điền rồi dừng ở nút Lưu.</span></p>
+    <label>Biệt danh (hiện ở đầu trang) <input id="inNick"></label>
+    <label>Công ty (gõ để chọn trang có sẵn) <input id="inCompany"></label>
+    <label>Chức vụ <input id="inPosition"></label>
+    <label>Trang web <input id="inWeb"></label>
+    <div class="muted">WhatsApp: <span id="inWa"></span> (đổi ở Cài đặt)</div>
+    <div class="steps">
+      <button data-step="nickname">Biệt danh</button>
+      <button data-step="work">Công việc</button>
+      <button data-step="wa">WhatsApp</button>
+      <button data-step="web">Trang web</button>
+    </div>
+    <label class="row"><input type="checkbox" id="introAuto"> Tự bấm Lưu</label>
+    <button id="introAll" class="primary">Làm lần lượt cả 4 mục (cần tick Tự bấm Lưu)</button>
   </section>
 
   <section id="cai">

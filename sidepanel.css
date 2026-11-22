@@ -30,3 +30,6 @@ td { border-bottom: 1px solid var(--line); padding: 4px 3px; vertical-align: top
 footer { position: sticky; bottom: 0; background: var(--bg); border-top: 1px solid var(--line); padding: 6px 12px; max-height: 30vh; overflow: auto; }
 #log div { font-size: 12px; } #log .err { color: var(--warn); }
 .tpl div { display: flex; gap: 6px; align-items: center; margin: 4px 0; } .tpl code { flex: 1; white-space: pre-wrap; }
+.steps { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
+details summary { cursor: pointer; margin: 6px 0; }

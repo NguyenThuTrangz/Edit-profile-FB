@@ -1,4 +1,5 @@
 import { DEFAULTS, cleanCaption, looksStandard } from './rules.js';
+import { KHO_DEFAULT, readTab, postsOf, listFolder, driveImage } from './sheet.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -12,9 +13,10 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
 });
 
 // ---------- cài đặt ----------
-let cfg = { ...DEFAULTS };
+const EXTRA = { nickLabel: '', company: 'K-Embroidery Factory', position: 'Sales', website: 'https://www.k-embroidery.com/', khoSheet: KHO_DEFAULT.sheet, khoTab: KHO_DEFAULT.tab };
+let cfg = { ...DEFAULTS, ...EXTRA };
 async function loadCfg() {
-  cfg = { ...DEFAULTS, ...(await store.get('cfg') || {}) };
+  cfg = { ...DEFAULTS, ...EXTRA, ...(await store.get('cfg') || {}) };
   $('#nickName').value = cfg.nickName; $('#wa').value = cfg.wa; $('#oldNames').value = cfg.oldNames.join(', ');
   $('#fanpageUrl').value = cfg.fanpageUrl; $('#custom').value = cfg.custom;
 }
@@ -73,12 +75,46 @@ async function grab(idx) {
     if (!r?.ok) throw Error(`Ảnh ${i + 1}: ${r?.error || 'lỗi tải'}`);
     images.push(r.dataUrl); log(`Tải ảnh ${i + 1}/${post.images.length} (${im.w}×${im.h})`);
   }
-  const c = cleanCaption(post.text, cfg);
-  const pack = { id: Date.now().toString(36), source: post.source, idx, raw: post.text, text: c.text, changes: c.changes, warnings: c.warnings,
-    images, sizes: post.images.map(x => `${x.w}×${x.h}`), createdAt: new Date().toISOString(), usedOn: [] };
+  await savePack({ source: post.source, idx, raw: post.text, images, sizes: post.images.map(x => `${x.w}×${x.h}`) });
+}
+async function savePack({ source, idx, raw, images, sizes }) {
+  const c = cleanCaption(raw, cfg);
+  const pack = { id: Date.now().toString(36), source, idx, raw, text: c.text, changes: c.changes, warnings: c.warnings,
+    images, sizes, createdAt: new Date().toISOString(), usedOn: [] };
   const packs = await store.get('packs') || []; packs.unshift(pack); await store.set('packs', packs);
   log(`Đã lưu gói #${idx}: ${images.length} ảnh${c.warnings.length ? ' · ⚠ ' + c.warnings.length + ' cảnh báo' : ''}.`);
   renderPacks();
+}
+
+// ---------- 1b. kho content (Google Sheet + folder ảnh Drive) ----------
+$('#khoLoad').onclick = e => busy(e.target, async () => {
+  const sheet = $('#khoSheet').value.trim() || KHO_DEFAULT.sheet, tab = $('#khoTab').value.trim() || KHO_DEFAULT.tab;
+  cfg = { ...cfg, khoSheet: sheet, khoTab: tab }; await store.set('cfg', cfg);
+  log('Đang tải sheet…');
+  const { tabs, rows } = await readTab(sheet, tab);
+  $('#khoTabs').innerHTML = tabs.map(t => `<option value="${esc(t)}">`).join('');
+  const posts = postsOf(rows), packs = await store.get('packs') || [], src = 'kho:' + tab;
+  $('#khoList').innerHTML = posts.map(p => {
+    const had = packs.find(x => x.source === src && x.idx === p.stt);
+    return `<li><div>STT ${p.stt} ${p.media ? '· 📁 ' + esc(p.mediaLabel.slice(0, 30)) : '<span class="warn">· không có link folder ảnh</span>'} ${had ? '<span class="tag std">đã lấy</span>' : ''}${had?.usedOn.length ? ' <span class="tag prof">đã dùng</span>' : ''}</div>
+      <div class="muted">${esc(p.text.split('\n')[0].slice(0, 120))}</div><button data-stt="${p.stt}">Tạo gói</button></li>`; }).join('') || '<li>Tab này không có dòng bài (cột A = STT, có chữ).</li>';
+  $('#khoList').querySelectorAll('button').forEach(b => b.onclick = () => busy(b, () => fromKho(tab, posts.find(p => p.stt === +b.dataset.stt))));
+  log(`Tab ${tab}: ${posts.length} bài.`);
+});
+async function fromKho(tab, p) {
+  const packs = await store.get('packs') || [];
+  if (packs.some(x => x.source === 'kho:' + tab && x.idx === p.stt) && !confirm(`Đã có gói ${tab} STT ${p.stt}. Tạo thêm gói nữa?`)) return;
+  const images = [], sizes = [];
+  if (p.media) {
+    const ids = await listFolder(p.media); log(`Folder có ${ids.length} file, đang tải…`);
+    for (const [i, id] of ids.entries()) {
+      const im = await driveImage(id);
+      if (!im) { log(`File ${i + 1} không phải ảnh (video?) — bỏ qua, tự thêm tay nếu cần.`, true); continue; }
+      images.push(im.dataUrl); sizes.push(im.size); log(`Tải ảnh ${images.length}/${ids.length} (${im.size})`);
+    }
+  }
+  if (!images.length && !confirm('Bài này không lấy được ảnh nào. Vẫn lưu gói?')) return;
+  await savePack({ source: 'kho:' + tab, idx: p.stt, raw: p.text, images, sizes });
 }
 
 // ---------- 2. gói bài ----------
@@ -149,10 +185,44 @@ $('#bioText').oninput = count;
 $('#bioTpl').onclick = e => { e.preventDefault(); $('#bioText').value = bioTpl(); count(); };
 $('#doBio').onclick = e => busy(e.target, async () => { const r = await send('editBio', { text: $('#bioText').value.trim(), autoSave: $('#bioAuto').checked }); if (r.saved) log('✅ Đã lưu tiểu sử.'); });
 function renderIntro() {
-  const n = cfg.nickName || '<tên smock>';
-  const items = [['Biệt danh (tick “Hiển thị ở đầu trang cá nhân”)', `${n} Smocking`], ['Công việc', 'Sales tại K-Embroidery Factory'], ['Trang web', 'k-embroidery.com'], ['WhatsApp', cfg.wa]];
-  $('#introTpl').innerHTML = items.map(([k, v]) => `<div><span class="muted">${esc(k)}:</span><code>${esc(v)}</code><button data-v="${esc(v)}">Chép</button></div>`).join('');
-  $('#introTpl').querySelectorAll('button').forEach(b => b.onclick = () => navigator.clipboard.writeText(b.dataset.v).then(() => log('Đã chép: ' + b.dataset.v)));
+  $('#inNick').value = cfg.nickLabel || (cfg.nickName ? cfg.nickName + ' Smocking' : '');
+  $('#inCompany').value = cfg.company; $('#inPosition').value = cfg.position; $('#inWeb').value = cfg.website; $('#inWa').textContent = cfg.wa;
+  $('#khoSheet').value = cfg.khoSheet; $('#khoTab').value = cfg.khoTab;
 }
+// Trang Giới thiệu của chính nick đang mở: profile.php?id=… → &sk=<mục>, tên riêng → /<tên>/<mục>
+const SECTION = { nickname: 'about_details', work: 'about_work_and_education', wa: 'about_contact_and_basic_info', web: 'about_contact_and_basic_info' };
+const STEP_NAME = { nickname: 'biệt danh', work: 'công việc', wa: 'WhatsApp', web: 'trang web' };
+function aboutUrl(url, sk) {
+  const u = new URL(url); const id = u.searchParams.get('id'); const seg = u.pathname.split('/').filter(Boolean)[0];
+  if (u.pathname === '/profile.php' && id) return `https://${u.host}/profile.php?id=${id}&sk=${sk}`;
+  if (!seg || /^(home|groups|watch|marketplace|photo|permalink\.php|story\.php|notifications|messages|friends|reel|stories)/.test(seg)) throw Error('Mở trang cá nhân của nick này trước (bấm vào tên / ảnh đại diện).');
+  return `https://${u.host}/${seg}/${sk}`;
+}
+const onSection = (url, sk) => { const u = new URL(url); return u.searchParams.get('sk') === sk || u.pathname.endsWith('/' + sk); };
+const loaded = tabId => new Promise(res => {
+  const done = () => { chrome.tabs.onUpdated.removeListener(f); clearTimeout(t); res(); };
+  const f = (id, info) => { if (id === tabId && info.status === 'complete') done(); };
+  const t = setTimeout(done, 20000); chrome.tabs.onUpdated.addListener(f);
+});
+async function introStep(step, autoSave) {
+  cfg = { ...cfg, nickLabel: $('#inNick').value.trim(), company: $('#inCompany').value.trim(), position: $('#inPosition').value.trim(), website: $('#inWeb').value.trim() };
+  await store.set('cfg', cfg);
+  const payload = { nickname: { step: 'nickname', value: cfg.nickLabel }, work: { step: 'work', company: cfg.company, position: cfg.position },
+    wa: { step: 'link', platform: 'WhatsApp', value: cfg.wa }, web: { step: 'link', platform: 'Trang web', value: cfg.website } }[step];
+  if (!payload.value && !payload.company) throw Error('Chưa điền giá trị cho mục ' + STEP_NAME[step] + '.');
+  const tab = await activeTab(); const sk = SECTION[step];
+  if (!onSection(tab.url, sk)) {
+    await chrome.tabs.update(tab.id, { url: aboutUrl(tab.url, sk) }); await loaded(tab.id); await new Promise(r => setTimeout(r, 3500));
+  }
+  const r = await send('introStep', { ...payload, autoSave });
+  log(r.skipped ? `Bỏ qua: ${r.skipped}.` : r.saved ? `✅ Đã lưu ${STEP_NAME[step]}.` : `Đã điền ${STEP_NAME[step]}, chờ bạn bấm Lưu.`);
+  return r;
+}
+document.querySelectorAll('[data-step]').forEach(b => b.onclick = () => busy(b, () => introStep(b.dataset.step, $('#introAuto').checked)));
+$('#introAll').onclick = e => busy(e.target, async () => {
+  if (!$('#introAuto').checked) throw Error('Làm cả 4 mục cần tick “Tự bấm Lưu”. Không tick thì bấm từng mục rồi tự Lưu.');
+  for (const st of ['nickname', 'work', 'wa', 'web']) await introStep(st, true);
+  log('✅ Xong phần Giới thiệu.');
+});
 
 await loadCfg(); renderPacks(); renderIntro(); whereAmI();

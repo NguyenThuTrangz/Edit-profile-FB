@@ -231,13 +231,101 @@
     save.click(); await wait(() => !ta.isConnected, 10000); progress('Đã lưu tiểu sử.'); return { ok: true, saved: true };
   }
 
+  // ---------- Giới thiệu: biệt danh, công việc, liên kết (WhatsApp / trang web) ----------
+  // Form sửa hiện ngay trong trang (không phải hộp thoại), có nút Hủy / Lưu riêng. Đã dò trên SM08 22/11/2026.
+  const mainEl = () => document.querySelector('[role="main"]') || document.body;
+  const digits = s => String(s).replace(/\D/g, '');
+  const SAVE_RE = /^(lưu|save)$/i, CANCEL_RE = /^(hủy|huỷ|cancel)$/i;
+  const fields = root => all('input[type="text"],input[type="search"],input:not([type]),textarea', root);
+  const formOf = el => { let f = el; for (let k = 0; k < 16 && f.parentElement; k++) { f = f.parentElement; if (findBtn(SAVE_RE, f).length && findBtn(CANCEL_RE, f).length) return f; } return null; };
+  async function typeInto(inp, text) {
+    inp.focus(); inp.select?.(); await sleep(200);
+    if (!document.execCommand('insertText', false, text) || inp.value !== text) {
+      const proto = inp.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(inp, text); inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await sleep(500);
+    if (inp.value !== text) throw Error('Facebook chưa nhận chữ "' + text + '". Gõ tay vào ô.');
+  }
+  async function openForm(addRe, what) {
+    const b = findBtn(addRe, mainEl())[0];
+    if (!b) throw Error(`Không thấy nút "${what}". Mở đúng mục trong trang Giới thiệu của chính nick này.`);
+    const had = new Set(fields(mainEl()));
+    await press(b, () => fields(mainEl()).some(i => !had.has(i)), 8000);
+    await sleep(800);
+    const fresh = fields(mainEl()).filter(i => !had.has(i));
+    return { fresh, form: formOf(fresh[0]) };
+  }
+  async function pickOption(re, timeout = 8000) {
+    const o = await wait(() => all('[role="option"]').find(x => re.test(clean(x.innerText))), timeout, 'Danh sách gợi ý không có mục cần chọn');
+    const target = o.querySelector('[tabindex],[role="button"]') || o.firstElementChild || o;   // bấm vào li không chọn được, phải bấm khối bên trong
+    target.click(); await sleep(900);
+    if (all('[role="option"]').includes(o)) { fire(target); await sleep(900); }
+    return clean(o.innerText);
+  }
+  async function finishForm(form, autoSave, what) {
+    if (!form) throw Error('Không thấy nút Lưu của mục ' + what + '.');
+    const save = findBtn(SAVE_RE, form).find(b => b.getAttribute('aria-disabled') !== 'true');
+    if (!save) throw Error('Nút Lưu của mục ' + what + ' chưa bấm được.');
+    if (!autoSave) { save.style.outline = '4px solid #e8590c'; save.scrollIntoView({ block: 'center' }); progress(`Đã điền ${what}. Kiểm tra rồi bấm LƯU (viền cam), hoặc Hủy.`); return { ok: true, saved: false }; }
+    save.click();
+    await wait(() => !save.isConnected || !visible(save), 15000, 'Đã bấm Lưu ' + what + ' nhưng form chưa đóng');
+    await sleep(1500); assertNotBlocked(); progress('Đã lưu ' + what + '.'); return { ok: true, saved: true };
+  }
+  async function introStep({ step, value, platform, company, position, autoSave = false, force = false }) {
+    assertNotBlocked();
+    const page = clean(mainEl().innerText);
+    if (step === 'nickname') {
+      if (!force && (page.includes(value + ' Biệt danh') || page.includes(value + ' Nickname'))) return { ok: true, skipped: 'đã có biệt danh ' + value };
+      const { fresh, form } = await openForm(/^(thêm biệt danh|add a nickname)/i, 'Thêm biệt danh, tên thường gọi…');
+      if (!/biệt danh|nickname/i.test(form?.innerText || '')) throw Error('Loại tên không phải Biệt danh. Chọn tay "Biệt danh".');
+      await typeInto(fresh.find(i => i.tagName === 'INPUT') || fresh[0], value);
+      const cb = form.querySelector('input[type="checkbox"]');
+      if (cb && !cb.checked) { cb.click(); await sleep(500); }
+      if (cb && !cb.checked) throw Error('Chưa tick được "Hiển thị ở đầu trang cá nhân". Tick tay.');
+      return finishForm(form, autoSave, 'biệt danh');
+    }
+    if (step === 'work') {
+      if (!force && /k-?embroidery/i.test(page.split(/Đại học|College|Trường trung học|High school/)[0] || '')) return { ok: true, skipped: 'đã có nơi làm việc K-Embroidery' };
+      const { form } = await openForm(/^(thêm nơi làm việc|add a workplace)/i, 'Thêm nơi làm việc');
+      const co = all('input[aria-label="Công ty"],input[aria-label="Company"]', form)[0];
+      if (!co) throw Error('Không thấy ô Công ty.');
+      await typeInto(co, company);
+      // FB bắt chọn trang có sẵn. Gõ "K-Embroidery Factory" chỉ ra 1 trang (SM08 đang dùng); không lấy JKembroidery…
+      const picked = await pickOption(/\bk-?embroidery factory\b/i).catch(() => '');
+      if (!picked) progress('⚠ Không thấy trang K-Embroidery trong gợi ý — chọn tay ô Công ty.');
+      const pos = all('input[aria-label="Chức vụ"],input[aria-label="Position"]', form)[0];
+      if (pos && position) { await typeInto(pos, position); await sleep(1200); pos.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await sleep(400); }
+      return finishForm(form, autoSave, 'công việc' + (picked ? ' (' + picked + ')' : ''));
+    }
+    if (step === 'link') {
+      const have = platform === 'WhatsApp' ? digits(page).includes(digits(value).slice(-9)) : page.toLowerCase().includes(value.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '').toLowerCase());
+      if (have && !force) return { ok: true, skipped: 'đã có ' + platform };
+      const { form } = await openForm(/^(thêm liên kết mạng xã hội|add a social link)/i, 'Thêm liên kết mạng xã hội');
+      const userInputs = () => all('input[aria-label*="tên người dùng"],input[aria-label*="username" i]', form);
+      const inp0 = userInputs().filter(i => !i.value).pop();
+      if (!inp0) throw Error('Không thấy ô liên kết mới.');
+      let row = inp0; while (row.parentElement && row.parentElement !== form && row.parentElement.querySelectorAll('[role="combobox"]').length <= 1) row = row.parentElement;
+      const combo = row.querySelector('[role="combobox"]');
+      if (!combo) throw Error('Không thấy ô chọn nền tảng.');
+      if (clean(combo.innerText).replace(/^.*\n/, '') !== platform && !clean(combo.innerText).endsWith(platform)) {
+        await press(combo, () => all('[role="option"]').length, 6000);
+        await pickOption(new RegExp('^' + platform.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i'));
+      }
+      const inp = userInputs().filter(i => !i.value).pop() || inp0;
+      await typeInto(inp, value);
+      return finishForm(form, autoSave, platform);
+    }
+    throw Error('Bước không hợp lệ: ' + step);
+  }
+
   function whoami() {
     const h1 = all('h1')[0];
     return { url: location.href, title: document.title, heading: h1 ? clean(h1.innerText) : '', blocked: blocked(),
       page: /allactivity/.test(location.href) ? 'activity' : /permalink|\/posts\/|story_fbid|\/photo/.test(location.href) || editDialog() ? 'post' : h1 ? 'profile' : 'other' };
   }
 
-  const ACTIONS = { whoami, scanSource, grabPost, scanActivity, openActivity, editPost, editBio };
+  const ACTIONS = { whoami, scanSource, grabPost, scanActivity, openActivity, editPost, editBio, introStep };
   chrome.runtime.onMessage.addListener((msg, _s, reply) => {
     const fn = ACTIONS[msg?.action]; if (!fn) return false;
     Promise.resolve().then(() => fn(msg.payload || {})).then(data => reply({ ok: true, data }), e => reply({ ok: false, error: e.message }));

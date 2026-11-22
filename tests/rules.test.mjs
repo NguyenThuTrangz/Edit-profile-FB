@@ -43,3 +43,8 @@ test('nhận bài tuyển dụng là cần thay, bài smock là chuẩn', () => 
   assert.equal(looksStandard('Mình đang tuyển team Marketing về “chung nhà”'), false);
   assert.equal(looksStandard('Blue Blooms & Timeless Smocking – A Boutique Must-Have!'), true);
 });
+
+test('cảnh báo mã bài Kxxx còn sót', () => {
+  const r = cleanCaption('DM or WhatsApp us code K151 for the catalog', { nickName: 'Olivia' });
+  assert.ok(r.warnings.some(w => w.includes('K151')));
+});

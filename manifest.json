@@ -1,23 +1,47 @@
 {
   "manifest_version": 3,
   "name": "Edit Profile FB – chuẩn hoá nick SM",
-  "version": "1.0.0",
-  "description": "Bán tự động thay bài cũ, sửa tiểu sử cho nick Facebook mới theo bài mẫu của nick cũ. Người dùng duyệt và bấm Lưu.",
+  "version": "1.1.0",
+  "description": "Chuẩn hoá nick FB mới: thay bài cũ, làm sạch caption, tiểu sử, biệt danh, Giới thiệu. Bạn duyệt rồi bấm Lưu.",
   "minimum_chrome_version": "116",
-  "permissions": ["storage", "sidePanel", "unlimitedStorage", "tabs", "scripting"],
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "unlimitedStorage",
+    "tabs",
+    "scripting"
+  ],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://web.facebook.com/*",
-    "https://*.fbcdn.net/*"
+    "https://*.fbcdn.net/*",
+    "https://docs.google.com/*",
+    "https://drive.google.com/*",
+    "https://drive.usercontent.google.com/*",
+    "https://*.googleusercontent.com/*"
   ],
-  "background": { "service_worker": "background.js", "type": "module" },
-  "side_panel": { "default_path": "sidepanel.html" },
-  "action": { "default_title": "Mở bảng Edit Profile FB" },
-  "icons": { "128": "icon.png" },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Mở bảng Edit Profile FB"
+  },
+  "icons": {
+    "128": "icon.png"
+  },
   "content_scripts": [
     {
-      "matches": ["https://www.facebook.com/*", "https://web.facebook.com/*"],
-      "js": ["fb-content.js"],
+      "matches": [
+        "https://www.facebook.com/*",
+        "https://web.facebook.com/*"
+      ],
+      "js": [
+        "fb-content.js"
+      ],
       "run_at": "document_idle"
     }
   ]
