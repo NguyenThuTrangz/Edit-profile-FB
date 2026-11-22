@@ -1,5 +1,6 @@
 import { DEFAULTS, cleanCaption, looksStandard } from './rules.js';
 import { KHO_DEFAULT, readTab, postsOf, listFolder, driveImage } from './sheet.js';
+import { parseDay, tally, sum, byGroup, isoDay } from './count.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -225,4 +226,84 @@ $('#introAll').onclick = e => busy(e.target, async () => {
   log('✅ Xong phần Giới thiệu.');
 });
 
-await loadCfg(); renderPacks(); renderIntro(); whereAmI();
+// ---------- 5. đếm bài (nick bất kỳ) ----------
+const CAT = {
+  wall: { key: 'MANAGEPOSTSPHOTOSANDVIDEOS', name: 'bài tường', title: /^(your posts, photos and videos|bài viết, ảnh và video của bạn)$/i },
+  group: { key: 'GROUPPOSTS', name: 'bài group', title: /^(group posts and comments|bài viết và bình luận trong nhóm)$/i }
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let demStop = false, dem = { name: '', since: '', wall: null, group: null, at: '' };
+const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return isoDay(d); };
+async function go(tabId, url) { await chrome.tabs.update(tabId, { url }); await loaded(tabId); await sleep(2500); }
+// Mở đúng mục Nhật ký của NICK ĐANG ĐĂNG NHẬP. /me/allactivity tự chuyển sang tên riêng; nick kiểu profile.php?id=
+// thì Facebook bỏ qua bộ lọc mục (hiện cả lượt like) → mở lại bằng /<id>/allactivity. Luôn kiểm tên mục trước khi đếm.
+async function openCat(kind) {
+  const tab = await activeTab();
+  if (!/^https:\/\/(www|web)\.facebook\.com\//.test(tab.url || '')) throw Error('Mở facebook.com ở tab đang xem trước (đã đăng nhập nick cần đếm).');
+  const host = new URL(tab.url).host, q = `allactivity?activity_history=false&category_key=${CAT[kind].key}&manage_mode=false&should_load_landing_page=false`;
+  await go(tab.id, `https://${host}/me/${q}`);
+  const u = new URL((await chrome.tabs.get(tab.id)).url), id = u.searchParams.get('id');
+  if (u.pathname === '/profile.php' && id) await go(tab.id, `https://${host}/${id}/${q}`);
+  let w; for (let i = 0; i < 12; i++) { w = await send('whoami').catch(() => null); if (w?.section && CAT[kind].title.test(w.section)) return; await sleep(1000); }
+  throw Error(`Facebook mở "${w?.section || '?'}", không phải mục ${CAT[kind].name} — dừng để khỏi đếm nhầm. Vào Nhật ký hoạt động chọn tay mục này rồi thử lại.`);
+}
+async function countKind(kind, since) {
+  await openCat(kind);
+  const rows = []; let reset = true;
+  while (!demStop) {
+    const r = await send('logChunk', { reset, rounds: 6 }); reset = false;
+    const now = new Date();
+    rows.push(...r.rows.map(x => ({ day: parseDay(x.date, now), head: x.head })));
+    const days = rows.map(x => x.day).filter(Boolean).sort(), oldest = days[0];
+    log(`Đếm ${CAT[kind].name}: đã đọc ${rows.length} mục, tới ngày ${oldest || '?'}…`);
+    if (r.end || (oldest && oldest < since)) break;
+  }
+  if (demStop) log('Đã dừng giữa chừng — số tháng cũ nhất có thể thiếu.', true);
+  return rows;
+}
+async function runCount(kinds) {
+  demStop = false;
+  const name = $('#demName').value.trim() || cfg.nickName || 'nick';
+  const since = $('#demSince').value || daysAgo(180);
+  if (dem.name !== name || dem.since !== since) dem = { name, since, wall: null, group: null, at: '' };
+  for (const k of kinds) { if (demStop) break; dem[k] = await countKind(k, since); }
+  dem.at = new Date().toISOString();
+  const all = await store.get('counts') || {}; all[name] = dem; await store.set('counts', all);
+  renderCount(); log('✅ Đếm xong.');
+}
+const COLS = [['wall', 'Bài tường'], ['groupPosts', 'Bài group'], ['groups', 'Số group khác nhau'], ['comments', 'Bình luận trong group'], ['profile', 'Cập nhật hồ sơ (không tính bài)']];
+function countTable() {
+  const r = tally({ wall: dem.wall || [], group: dem.group || [] }, dem.since);
+  const s30 = daysAgo(30), last30 = tally({ wall: dem.wall || [], group: dem.group || [] }, s30);
+  const t30 = { month: `30 ngày (${s30} → nay)`, ...sum(last30.months), groups: byGroup(dem.group || [], s30).length };
+  const rows = [t30, ...r.months];
+  const na = k => (k === 'wall' || k === 'profile') ? !dem.wall : !dem.group;
+  return { rows, cell: (x, k) => na(k) ? '—' : x[k], undated: r.undated, other: sum(r.months).other };
+}
+function renderCount() {
+  if (!dem.wall && !dem.group) { $('#demOut').innerHTML = ''; return; }
+  const { rows, cell, undated, other } = countTable();
+  $('#demOut').innerHTML = `<p><b>${esc(dem.name)}</b> · từ ${esc(dem.since)} · đếm lúc ${esc(dem.at.slice(0, 16).replace('T', ' '))}</p>
+    <table><tr><td><b>Tháng</b></td>${COLS.map(([, h]) => `<td><b>${h}</b></td>`).join('')}</tr>
+    ${rows.map(x => `<tr><td>${esc(x.month)}</td>${COLS.map(([k]) => `<td>${cell(x, k)}</td>`).join('')}</tr>`).join('')}</table>
+    ${undated ? `<div class="warn">⚠ ${undated} mục không đọc được ngày (không tính).</div>` : ''}
+    ${other ? `<div class="warn">⚠ ${other} mục trong mục group không nhận ra là bài hay bình luận (không tính) — báo người làm extension.</div>` : ''}`;
+  $('#demGroups').innerHTML = byGroup(dem.group || [], daysAgo(30)).map(([g, n]) => `<div>${n} · ${esc(g)}</div>`).join('') || 'Chưa có.';
+}
+const countTsv = sep => { const { rows, cell } = countTable(); const q = v => sep === ',' ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+  return [['Nick', 'Tháng', ...COLS.map(c => c[1])], ...rows.map(x => [dem.name, x.month, ...COLS.map(([k]) => cell(x, k))])].map(r => r.map(q).join(sep)).join('\n'); };
+$('#demWall').onclick = e => busy(e.target, () => runCount(['wall']));
+$('#demGroup').onclick = e => busy(e.target, () => runCount(['group']));
+$('#demBoth').onclick = e => busy(e.target, () => runCount(['wall', 'group']));
+$('#demStop').onclick = () => { demStop = true; log('Đang dừng…'); };
+$('#demCopy').onclick = () => { if (!dem.at) return log('Chưa có kết quả.', true); navigator.clipboard.writeText(countTsv('\t')).then(() => log('Đã chép bảng — dán vào Google Sheet.')); };
+$('#demCsv').onclick = () => { if (!dem.at) return log('Chưa có kết quả.', true);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + countTsv(',')], { type: 'text/csv' }));
+  a.download = `dem-bai-${dem.name}-${isoDay(new Date())}.csv`; a.click(); };
+async function loadCount() {
+  const d = new Date(); d.setMonth(d.getMonth() - 6, 1); $('#demSince').value = isoDay(d);
+  const all = await store.get('counts') || {}; const last = Object.values(all).sort((a, b) => (b.at || '').localeCompare(a.at || ''))[0];
+  if (last) { dem = last; $('#demName').value = last.name; $('#demSince').value = last.since; renderCount(); }
+}
+
+await loadCfg(); renderPacks(); renderIntro(); whereAmI(); loadCount();

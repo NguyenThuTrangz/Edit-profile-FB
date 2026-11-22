@@ -16,6 +16,7 @@
     <button data-tab="goi">2. Gói bài</button>
     <button data-tab="thay">3. Thay bài</button>
     <button data-tab="bio">4. Hồ sơ</button>
+    <button data-tab="dem">5. Đếm bài</button>
     <button data-tab="cai">Cài đặt</button>
   </nav>
 
@@ -73,6 +74,25 @@
     </div>
     <label class="row"><input type="checkbox" id="introAuto"> Tự bấm Lưu</label>
     <button id="introAll" class="primary">Làm lần lượt cả 4 mục (cần tick Tự bấm Lưu)</button>
+  </section>
+
+  <section id="dem">
+    <p class="muted">Đếm số bài <b>chính nick đang đăng nhập</b> đã đăng lên tường và vào group, theo từng tháng, từ <b>Nhật ký hoạt động</b>. Dùng được cho nick bất kỳ (Facebook tiếng Việt hoặc tiếng Anh), chỉ đọc, không sửa gì.</p>
+    <label>Tên nick (ghi vào bảng kết quả) <input id="demName" placeholder="vd LILY"></label>
+    <label>Đếm từ ngày <input type="date" id="demSince"></label>
+    <div class="steps">
+      <button id="demWall">Đếm bài tường</button>
+      <button id="demGroup">Đếm bài group</button>
+      <button id="demBoth" class="primary">Đếm cả hai</button>
+      <button id="demStop">Dừng</button>
+    </div>
+    <div id="demOut"></div>
+    <div class="steps">
+      <button id="demCopy">Chép bảng (dán vào Google Sheet)</button>
+      <button id="demCsv">Tải file CSV</button>
+    </div>
+    <details><summary>Bài group theo từng group (30 ngày gần nhất)</summary><div id="demGroups" class="muted"></div></details>
+    <p class="muted">Bài đang chờ admin duyệt, bài bị từ chối hoặc đã xoá không có trong Nhật ký nên không được đếm. Nick có nhiều bài thì đếm lâu (vài phút): để yên tab Facebook, không thu nhỏ cửa sổ.</p>
   </section>
 
   <section id="cai">

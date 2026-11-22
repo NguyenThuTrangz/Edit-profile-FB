@@ -14,9 +14,38 @@ Extension Chrome (Manifest V3) để **chuẩn hoá nick Facebook mới** theo b
 5. **Lấy bài từ kho content** (từ 1.1.0): đọc thẳng Google Sheet kho content (mặc định workbook KE, tab GRACIE / CATHIE / LILY / EMILY / 3. CONTENT GROUP), tải ảnh trong folder Drive của bài, làm sạch caption như trên. Không cần mở sheet hay đăng nhập Google.
 6. **Hồ sơ**: điền tiểu sử (≤ 101 ký tự) theo mẫu; **tự điền phần Giới thiệu** (từ 1.1.0): biệt danh (tick “Hiển thị ở đầu trang cá nhân”), công việc (chọn đúng trang *K-Embroidery Factory*), liên kết WhatsApp, trang web. Mục nào đã có thì tự bỏ qua.
 
+7. **Đếm bài đã đăng** (từ 1.2.0): đếm số bài **tường** và bài **group** mà nick đang đăng nhập đã đăng, theo từng tháng và 30 ngày gần nhất, đọc từ Nhật ký hoạt động. Dùng được cho **nick bất kỳ, máy bất kỳ**, kể cả nick ngoài hệ thống SM. Chỉ đọc, không sửa gì. Xem mục [Đếm bài](#đếm-bài-cho-nick-bất-kỳ-sale-persona).
+
 Mỗi gói bài ghi lại đã dùng cho nick nào, tránh dùng 1 caption cho 2 nick.
 
-## Cài đặt (mỗi profile Chrome SM cài 1 lần)
+## Đếm bài cho nick bất kỳ (Sale, persona…)
+
+Mục đích: Sale không phải tự đếm tay bài đã đăng (tường + group) qua nhiều tháng. Số dùng điền tab *Tỉ lệ convert FB persona* để làm target.
+
+1. Cài extension trên máy đó (mục Cài đặt bên dưới, không cần gì khác). Không cần điền Cài đặt.
+2. Mở facebook.com ở tab đang xem, đăng nhập đúng nick cần đếm. Facebook để **tiếng Việt hoặc tiếng Anh**.
+3. Bấm biểu tượng extension → tab **5. Đếm bài**.
+4. Gõ **Tên nick** (vd `LILY`), chọn **Đếm từ ngày** (mặc định 6 tháng trước), bấm **Đếm cả hai**.
+5. Extension tự mở *Nhật ký hoạt động*, kéo xuống tới mốc ngày, rồi hiện bảng:
+
+| Cột | Nghĩa |
+|---|---|
+| Bài tường | Bài đăng lên trang cá nhân (ảnh, trạng thái, chia sẻ). Không tính đổi ảnh đại diện / ảnh bìa / sự kiện trong đời / tiểu sử (để riêng cột *Cập nhật hồ sơ*) |
+| Bài group | Bài đăng vào group (“posted in …” / “đã đăng trong …”) |
+| Số group khác nhau | Bao nhiêu group khác nhau đã đăng |
+| Bình luận trong group | Bình luận, trả lời trong group (không cộng vào bài) |
+
+6. **Chép bảng** rồi dán vào Google Sheet, hoặc **Tải file CSV**. Danh sách bài theo từng group (30 ngày) nằm ở mục xổ xuống bên dưới bảng.
+
+Lưu ý:
+- Chỉ đếm được **bài đã lên**. Bài đang chờ admin duyệt, bị từ chối hoặc đã xoá không nằm trong Nhật ký.
+- Nick nhiều bài (vài trăm bài/tháng) thì đếm mất vài phút. Để yên tab Facebook, không thu nhỏ cửa sổ. Bấm *Dừng* nếu cần; số tháng cũ nhất khi đó có thể thiếu.
+- Nick có địa chỉ dạng `profile.php?id=…`: Facebook bỏ qua bộ lọc mục, hiện cả lượt like nếu mở theo kiểu thường. Extension tự mở lại đúng mục, và **kiểm tên mục trước khi đếm**. Sai mục thì dừng, không đếm nhầm.
+- Kết quả lưu trong máy đó (theo profile Chrome), không gửi đi đâu.
+
+Đã thử 22/11/2026 trên SM01 (giao diện tiếng Anh): tháng 10 có 5 bài tường, tháng 11 có 5 bài tường và 5 bài group ở 4 group. Khớp từng bài với nhật ký vận hành. SM03 (`profile.php?id=`) và SM08 (tiếng Việt) đã kiểm cách mở mục và tên mục.
+
+## Cài đặt (mỗi profile Chrome cài 1 lần, máy nào cũng được)
 
 1. Tải repo về (Code → Download ZIP, giải nén) hoặc `git clone`. Để thư mục **cố định**: ID extension và dữ liệu gói bài gắn với đường dẫn thư mục.
 2. Mở `chrome://extensions`, bật **Developer mode**.
@@ -86,6 +115,7 @@ Bài học: ô chữ của Facebook (Lexical) bỏ qua `execCommand('delete')`. 
 | `fb-content.js` | Chạy trong tab Facebook: quét bài, lấy ảnh qua trình xem, đọc nhật ký, sửa bài, sửa tiểu sử |
 | `sidepanel.*` | Giao diện tiếng Việt, lưu cài đặt + gói bài trong `chrome.storage.local` (riêng từng profile) |
 | `rules.js` | Quy tắc làm sạch caption (cảnh báo cả mã bài Kxxx còn sót), nhận diện bài cần thay |
+| `count.js` | Đọc ngày (tiếng Việt / tiếng Anh), phân loại dòng nhật ký, cộng theo tháng; test `node --test tests/count.test.mjs` |
 | `sheet.js` | Đọc kho content (xuất xlsx để giữ link folder ảnh dạng chip), liệt kê folder Drive, tải + thu nhỏ ảnh |
 | `tests/rules.test.mjs` | Test quy tắc: `node --test tests/rules.test.mjs` |
 

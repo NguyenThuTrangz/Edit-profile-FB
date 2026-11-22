@@ -101,7 +101,37 @@
   }
 
   // ---------- Nhật ký hoạt động: danh sách bài của nick đang mở ----------
-  const DATE_RE = /^(\d{1,2} tháng \d{1,2}(,? \d{4})?|(january|february|march|april|may|june|july|august|september|october|november|december) \d{1,2}(, \d{4})?|hôm nay|hôm qua|today|yesterday)$/i;
+  const MONTHS = 'january|february|march|april|may|june|july|august|september|october|november|december';
+  const DATE_RE = new RegExp(`^(\\d{1,2} tháng \\d{1,2}(,? \\d{4})?|(${MONTHS}) \\d{1,2}(, \\d{4})?|\\d{1,2} (${MONTHS})( \\d{4})?|hôm nay|hôm qua|today|yesterday)$`, 'i');
+  // Đọc Nhật ký hoạt động từng đoạn (bảng bên gọi lặp lại, tự quyết khi nào dừng theo ngày).
+  // Mỗi lần trả các mục MỚI thấy: {date (chữ gốc), head, audience}. Không phụ thuộc tên nick → dùng được cho nick bất kỳ.
+  async function logChunk({ reset = false, rounds = 6 } = {}) {
+    assertNotBlocked();
+    if (reset || !window.__epfbLog || window.__epfbLog.url !== location.href) window.__epfbLog = { url: location.href, seen: new WeakSet(), lastH: 0, still: 0, total: 0 };
+    const st = window.__epfbLog, main = document.querySelector('[role="main"]') || document.body;
+    const isView = e => /^(xem|view)$/i.test(clean(e.innerText));
+    const out = [];
+    const collect = () => {
+      const heads = [...main.querySelectorAll('span,h2,h3,div')].filter(e => e.childElementCount === 0 && DATE_RE.test(clean(e.textContent)));
+      for (const v of main.querySelectorAll('a,[role="link"]')) {
+        if (st.seen.has(v) || !isView(v)) continue; st.seen.add(v);
+        let row = v; while (row.parentElement && row.parentElement !== main && [...row.parentElement.querySelectorAll('a,[role="link"]')].filter(isView).length === 1) row = row.parentElement;
+        const lines = row.innerText.split('\n').map(clean).filter(Boolean).filter(s => !/^(xem|view|·)$/i.test(s) && !DATE_RE.test(s));
+        const audience = lines.find(s => /^(công khai|bạn bè|chỉ mình tôi|public|friends|only me|tùy chỉnh|custom|nhóm công khai|nhóm riêng tư|public group|private group)$/i.test(s)) || '';
+        let date = ''; for (const h of heads) if (h.compareDocumentPosition(v) & Node.DOCUMENT_POSITION_FOLLOWING) date = clean(h.textContent);
+        out.push({ date, head: (lines.find(s => s !== audience && !/^\d{1,2}:\d{2}( ?[ap]m)?$/i.test(s)) || '').slice(0, 200), audience });
+      }
+    };
+    for (let i = 0; i < rounds; i++) {
+      collect();
+      scrollTo(0, document.body.scrollHeight); await sleep(1400);
+      const h = document.body.scrollHeight, loading = all('[role="progressbar"]').length;
+      if (h === st.lastH && !loading) st.still++; else { st.still = 0; st.lastH = h; }
+      if (st.still >= 4) break;
+    }
+    collect(); st.total += out.length;
+    return { rows: out, end: st.still >= 4, total: st.total };
+  }
   async function scanActivity({ rounds = 20 } = {}) {
     const main = document.querySelector('[role="main"]') || document.body;
     let lastH = 0;
@@ -321,11 +351,12 @@
 
   function whoami() {
     const h1 = all('h1')[0];
-    return { url: location.href, title: document.title, heading: h1 ? clean(h1.innerText) : '', blocked: blocked(),
+    const m = document.querySelector('[role="main"]');
+    return { url: location.href, title: document.title, heading: h1 ? clean(h1.innerText) : '', blocked: blocked(), section: m ? clean(m.innerText.split('\n')[0] || '') : '',
       page: /allactivity/.test(location.href) ? 'activity' : /permalink|\/posts\/|story_fbid|\/photo/.test(location.href) || editDialog() ? 'post' : h1 ? 'profile' : 'other' };
   }
 
-  const ACTIONS = { whoami, scanSource, grabPost, scanActivity, openActivity, editPost, editBio, introStep };
+  const ACTIONS = { whoami, scanSource, grabPost, scanActivity, openActivity, logChunk, editPost, editBio, introStep };
   chrome.runtime.onMessage.addListener((msg, _s, reply) => {
     const fn = ACTIONS[msg?.action]; if (!fn) return false;
     Promise.resolve().then(() => fn(msg.payload || {})).then(data => reply({ ok: true, data }), e => reply({ ok: false, error: e.message }));
