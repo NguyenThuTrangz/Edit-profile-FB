@@ -31,7 +31,7 @@ export function wallKind(head) {
 // Dòng ở mục "Bài viết và bình luận trong nhóm": đăng bài / bình luận, tên group
 export function groupKind(head) {
   const h = String(head || '').replace(/\s+/g, ' ').trim();
-  let r = h.match(/(?:posted in|shared .*? to|đã đăng(?: bài)? trong(?: nhóm)?|đã chia sẻ .*? (?:lên|vào|trong)(?: nhóm)?)\s+(.+?)\.?$/i);
+  const r = h.match(/(?:posted in|shared .*? (?:to|in)|đã đăng(?: bài)? (?:trong|vào)(?: nhóm)?|đã chia sẻ .*? (?:lên|vào|trong)(?: nhóm)?)\s+(.+?)\.?$/i);
   if (r) return { type: 'post', group: r[1].trim() };
   if (/commented|replied|bình luận|trả lời|phản hồi/i.test(h)) return { type: 'comment', group: '' };
   return { type: 'other', group: '' };
