@@ -24,6 +24,8 @@ input:not([type]), input[type=text], select, textarea { width: 100%; padding: 6p
 .warn { color: var(--warn); }
 .ok { color: var(--ok); }
 table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+.table-scroll { overflow-x: auto; }
+.table-scroll table { min-width: 600px; }
 td { border-bottom: 1px solid var(--line); padding: 4px 3px; vertical-align: top; }
 .tag { border-radius: 8px; padding: 0 6px; font-size: 11px; white-space: nowrap; }
 .tag.need { background: #ffe8cc; color: #a33b00; } .tag.std { background: #d3f9d8; color: #1b5e20; } .tag.prof { background: #e9ecef; color: #495057; }

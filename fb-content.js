@@ -39,10 +39,30 @@
     c.querySelectorAll('img[alt]').forEach(i => i.replaceWith(document.createTextNode(i.alt)));
     c.querySelectorAll('[role="button"]').forEach(b => { if (/^(ẩn bớt|see less|xem thêm|see more)$/i.test(clean(b.textContent))) b.remove(); });
     const leaves = [...c.querySelectorAll('div[dir="auto"]')].filter(d => !d.querySelector('div[dir="auto"]')).map(d => d.textContent.replace(/ /g, ' ').trim());
-    const text = leaves.length ? leaves.join('\n') : c.innerText;
+    const text = leaves.length ? leaves.join('\n') : c.innerText || c.textContent;
     return text.replace(/\n{3,}/g, '\n\n').trim();
   };
   const expand = async p => { const m = findBtn(/^(xem thêm|see more)$/i, p)[0]; if (m) { m.click(); await sleep(900); } };
+
+  async function readGroupPost({ shared }) {
+    const post = await wait(() => {
+      assertNotBlocked();
+      const main = document.querySelector('[role="main"]');
+      return main && all('[role="article"],div[aria-posinset]', main)[0];
+    }, 4000, 'Không đọc được bài group');
+    const message = msgEl(post);
+    let caption = '';
+    if (message && !message.closest('[role="article"] [role="article"]')) {
+      await expand(message);
+      if (!findBtn(/^(xem thêm|see more)$/i, message).length && !/…$|\.\.\.$/.test(clean(message.innerText))) caption = captionOf(message);
+    }
+    const links = all('a[href]', post).filter(link => {
+      if (link.closest('[data-ad-rendering-role="story_message"],[data-ad-preview="message"],[data-ad-comet-preview="message"]')) return false;
+      const article = link.closest('[role="article"]');
+      return shared || (article && article !== post && post.contains(article));
+    });
+    return { caption, sourceLinks: links.map(link => link.href) };
+  }
 
   // ---------- Quét bài trên trang nick nguồn ----------
   async function scanSource({ rounds = 25 } = {}) {
@@ -119,7 +139,7 @@
         const lines = row.innerText.split('\n').map(clean).filter(Boolean).filter(s => !/^(xem|view|·)$/i.test(s) && !DATE_RE.test(s));
         const audience = lines.find(s => /^(công khai|bạn bè|chỉ mình tôi|public|friends|only me|tùy chỉnh|custom|nhóm công khai|nhóm riêng tư|public group|private group)$/i.test(s)) || '';
         let date = ''; for (const h of heads) if (h.compareDocumentPosition(v) & Node.DOCUMENT_POSITION_FOLLOWING) date = clean(h.textContent);
-        out.push({ date, head: (lines.find(s => s !== audience && !/^\d{1,2}:\d{2}( ?[ap]m)?$/i.test(s)) || '').slice(0, 200), audience });
+        out.push({ date, head: lines.find(s => s !== audience && !/^\d{1,2}:\d{2}( ?[ap]m)?$/i.test(s)) || '', audience, href: v.href || '' });
       }
     };
     for (let i = 0; i < rounds; i++) {
@@ -356,7 +376,7 @@
       page: /allactivity/.test(location.href) ? 'activity' : /permalink|\/posts\/|story_fbid|\/photo/.test(location.href) || editDialog() ? 'post' : h1 ? 'profile' : 'other' };
   }
 
-  const ACTIONS = { whoami, scanSource, grabPost, scanActivity, openActivity, logChunk, editPost, editBio, introStep };
+  const ACTIONS = { whoami, scanSource, grabPost, scanActivity, openActivity, logChunk, readGroupPost, editPost, editBio, introStep };
   chrome.runtime.onMessage.addListener((msg, _s, reply) => {
     const fn = ACTIONS[msg?.action]; if (!fn) return false;
     Promise.resolve().then(() => fn(msg.payload || {})).then(data => reply({ ok: true, data }), e => reply({ ok: false, error: e.message }));
