@@ -55,6 +55,19 @@ export function groupKind(head, groupHint = '') {
   return { type: 'other', group: '' };
 }
 
+const GROUP_AUDIENCE = /^(nhóm công khai|nhóm riêng tư|public group|private group)$/i;
+// Phân loại 1 dòng của mục group (dòng do fb-content.js đọc: head, audience, group, groupId, pending).
+// FB tiếng Việt hiện bài chia sẻ vào group chỉ bằng caption + "Nhóm công khai" + nút Xem tới /groups/<id>/permalink/…,
+// không có câu "đã chia sẻ". Dòng như vậy (không phải bình luận, có đối tượng là nhóm) là bài group, share = true.
+// Bài đang chờ admin duyệt (link /pending_posts/) chưa lên nên không tính.
+export function groupRow(r = {}) {
+  if (r.pending) return { type: 'pending', group: '' };
+  const hint = r.group || (r.groupId ? 'nhóm ' + r.groupId : '');
+  const g = groupKind(r.head, hint);
+  if (g.type === 'other' && GROUP_AUDIENCE.test(norm(r.audience)) && r.groupId) return { type: 'post', group: hint, share: true };
+  return g;
+}
+
 // Danh sách bài group {day, group} từ cả hai mục. Bài tường chia sẻ vào group có thể hiện ở mục tường,
 // mục group, hoặc cả hai: dòng ở mục tường chỉ được cộng khi mục group chưa có bài cùng ngày, cùng group.
 export function groupPostList({ wall = [], group = [] }, since = '') {
@@ -62,7 +75,7 @@ export function groupPostList({ wall = [], group = [] }, since = '') {
   const out = [], have = new Map();
   for (const r of group) {
     if (!inRange(r)) continue;
-    const g = groupKind(r.head, r.group);
+    const g = groupRow(r);
     if (g.type !== 'post') continue;
     out.push({ day: r.day, group: g.group });
     const k = r.day + '|' + g.group.toLowerCase(); have.set(k, (have.get(k) || 0) + 1);
@@ -80,7 +93,7 @@ export function groupPostList({ wall = [], group = [] }, since = '') {
 export function tally({ wall = [], group = [] }, since = '') {
   const by = new Map();
   const get = m => { if (!by.has(m)) by.set(m, { month: m, wall: 0, profile: 0, groupPosts: 0, comments: 0, other: 0, groupSet: new Set() }); return by.get(m); };
-  let undated = 0;
+  let undated = 0, pending = 0;
   for (const r of wall) {
     if (!r.day) { undated++; continue; } if (since && r.day < since) continue;
     const k = wallKind(r.head, r.group);
@@ -88,12 +101,14 @@ export function tally({ wall = [], group = [] }, since = '') {
   }
   for (const r of group) {
     if (!r.day) { undated++; continue; } if (since && r.day < since) continue;
-    const g = groupKind(r.head, r.group), x = get(r.day.slice(0, 7));
+    const g = groupRow(r);
+    if (g.type === 'pending') { pending++; continue; }
+    const x = get(r.day.slice(0, 7));
     if (g.type === 'comment') x.comments++; else if (g.type === 'other') x.other++;
   }
   for (const p of groupPostList({ wall, group }, since)) { const x = get(p.day.slice(0, 7)); x.groupPosts++; x.groupSet.add(p.group); }
   const months = [...by.values()].sort((a, b) => b.month.localeCompare(a.month)).map(({ groupSet, ...x }) => ({ ...x, groups: groupSet.size }));
-  return { months, undated };
+  return { months, undated, pending };
 }
 
 // Cộng dồn các tháng thành 1 dòng (vd "30 ngày gần nhất")

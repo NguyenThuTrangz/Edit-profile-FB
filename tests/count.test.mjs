@@ -103,3 +103,30 @@ test('1 bài tường chia sẻ vào 3 group: 1 bài tường + 3 bài group, kh
   // kết quả lưu từ bản cũ (không có trường group) vẫn đếm được
   assert.equal(tally({ group: [{ day: '2026-11-20', head: 'X shared a post in Smocks B.' }] }).months[0].groupPosts, 1);
 });
+
+// Dòng thật từ Nhật ký → "Bài viết và bình luận trong nhóm" (FB tiếng Việt, 27/11/2026), tên người đã thay.
+test('FB tiếng Việt: bài chia sẻ chỉ có caption + "Nhóm công khai", bài "đã đăng trong" không có nút Xem, bài chờ duyệt', async () => {
+  const { tally, byGroup, groupRow } = await import('../count.js');
+  const group = [
+    { day: '2026-11-27', head: 'test 1', audience: 'Nhóm công khai', groupId: '1029147452879484' },
+    { day: '2026-11-27', head: 'An Nguyễn đã đăng trong Dr. Aarambhi 💕.', audience: 'Nhóm công khai' },
+    { day: '2026-11-27', head: '“Đậm cũng là trà, nhạt cũng là trà.”', audience: 'Nhóm công khai', groupId: '186383999665307' },
+    { day: '2026-11-27', head: 'An Nguyễn đã đăng trong Retro Video Gamers.', audience: 'Nhóm công khai' },
+    { day: '2026-11-27', head: 'cho tot ha noi', audience: 'Nhóm công khai', groupId: '1281335429297794' },
+    { day: '2026-11-27', head: 'An Nguyễn đã đăng trong SĂN SALE HỘ - PASS ĐỒ SĂN SALE SHOPEE.', audience: 'Nhóm công khai' },
+    { day: '2026-11-26', head: '“Đậm cũng là trà, nhạt cũng là trà.”', audience: 'Nhóm công khai', groupId: 'dayxahoi' },
+    { day: '2026-11-26', head: '“Đậm cũng là trà, nhạt cũng là trà.”', audience: 'Nhóm riêng tư', groupId: '1046218992825575', pending: true },
+    { day: '2024-08-14', head: 'An Nguyễn đã bình luận về bài viết của Bình.', audience: 'Nhóm riêng tư', groupId: '5' },
+    { day: '2022-09-02', head: 'An Nguyễn đã phản hồi bình luận của Chi.', audience: 'Nhóm công khai' }
+  ];
+  assert.deepEqual(groupRow(group[0]), { type: 'post', group: 'nhóm 1029147452879484', share: true });
+  assert.equal(groupRow(group[1]).group, 'Dr. Aarambhi 💕');
+  assert.equal(groupRow(group[7]).type, 'pending');
+  assert.equal(groupRow(group[8]).type, 'comment');
+  // caption không có nhóm, không có link group → vẫn là "không nhận ra"
+  assert.equal(groupRow({ head: 'abc', audience: 'Công khai' }).type, 'other');
+  const r = tally({ group }, '2026-11-01');
+  assert.deepEqual(r.months, [{ month: '2026-11', wall: 0, profile: 0, groupPosts: 7, comments: 0, other: 0, groups: 7 }]);
+  assert.equal(r.pending, 1);
+  assert.equal(byGroup(group, '2026-11-01').length, 7);
+});

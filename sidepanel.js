@@ -1,6 +1,6 @@
 import { DEFAULTS, cleanCaption, looksStandard } from './rules.js';
 import { KHO_DEFAULT, readTab, postsOf, listFolder, driveImage } from './sheet.js';
-import { parseDay, tally, sum, byGroup, groupKind, isoDay } from './count.js';
+import { parseDay, tally, sum, byGroup, groupRow, isoDay } from './count.js';
 import { captionKey, crosspostStats, facebookUrl, wallPostId } from './crosspost.js';
 
 const $ = s => document.querySelector(s);
@@ -254,7 +254,7 @@ async function countKind(kind, since) {
   while (!demStop) {
     const r = await send('logChunk', { reset, rounds: 6 }, tabId); reset = false;
     const now = new Date();
-    rows.push(...r.rows.map(x => ({ day: parseDay(x.date, now), head: x.head, href: x.href, group: x.group || '' })));
+    rows.push(...r.rows.map(x => ({ day: parseDay(x.date, now), head: x.head, href: x.href, group: x.group || '', audience: x.audience || '', groupId: x.groupId || '', pending: !!x.pending })));
     const days = rows.map(x => x.day).filter(Boolean).sort(), oldest = days[0];
     log(`Đếm ${CAT[kind].name}: đã đọc ${rows.length} mục, tới ngày ${oldest || '?'}…`);
     if (r.end || (oldest && oldest < since)) break;
@@ -272,7 +272,7 @@ function groupPostUrl(href) {
 }
 
 async function readGroupDetails(rows, since) {
-  const candidates = rows.filter(row => row.day >= since && groupKind(row.head, row.group).type === 'post' && groupPostUrl(row.href));
+  const candidates = rows.filter(row => row.day >= since && groupRow(row).type === 'post' && groupPostUrl(row.href));
   if (!candidates.length) return;
   const tab = await chrome.tabs.create({ active: false });
   const visited = new Map();
@@ -290,7 +290,7 @@ async function readGroupDetails(rows, since) {
           if (demStop) break;
           const current = await chrome.tabs.get(tab.id);
           if (!groupPostUrl(current.url).endsWith(`/posts/${postKey}/`)) continue;
-          const post = await send('readGroupPost', { shared: /\bshared\b|đã chia sẻ/i.test(row.head) }, tab.id);
+          const post = await send('readGroupPost', { shared: !!groupRow(row).share || /\bshared\b|đã chia sẻ/i.test(row.head) }, tab.id);
           const caption = captionKey(post.caption);
           const digest = caption && await crypto.subtle.digest('SHA-256', new TextEncoder().encode(caption));
           const captionHash = digest ? Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('') : '';
@@ -340,16 +340,17 @@ function countTable() {
     if (k === 'wallShares' && !(x.hasWallIds && x.read)) return '—';
     return na(k) ? '—' : x[k];
   };
-  return { rows, cell, undated: r.undated, other: sum(r.months).other };
+  return { rows, cell, undated: r.undated, pending: r.pending, other: sum(r.months).other };
 }
 function renderCount() {
   if (!dem.wall && !dem.group) { $('#demOut').innerHTML = ''; return; }
-  const { rows, cell, undated, other } = countTable();
+  const { rows, cell, undated, pending, other } = countTable();
   $('#demOut').innerHTML = `<p><b>${esc(dem.name)}</b> · từ ${esc(dem.since)} · đếm lúc ${esc(dem.at.slice(0, 16).replace('T', ' '))}</p>
     <div class="table-scroll"><table><tr><td><b>Tháng</b></td>${COLS.map(([, h]) => `<td><b>${h}</b></td>`).join('')}</tr>
     ${rows.map(x => `<tr><td>${esc(x.month)}</td>${COLS.map(([k]) => `<td>${cell(x, k)}</td>`).join('')}</tr>`).join('')}</table></div>
     ${dem.group ? `<p class="muted">Trong dòng 30 ngày, đọc được ${rows[0].read}/${rows[0].posts} bài group và ${rows[0].checked} caption. Dấu — nghĩa là thiếu dữ liệu để tính. Dùng “Đếm cả hai” để đối chiếu bài chia sẻ với bài gốc.</p>` : ''}
     ${undated ? `<div class="warn">⚠ ${undated} mục không đọc được ngày (không tính).</div>` : ''}
+    ${pending ? `<div class="muted">${pending} bài group đang chờ admin duyệt (chưa tính, duyệt xong đếm lại).</div>` : ''}
     ${other ? `<div class="warn">⚠ ${other} mục trong mục group không nhận ra là bài hay bình luận (không tính) — báo người làm extension.</div>` : ''}`;
   $('#demGroups').innerHTML = byGroup({ wall: dem.wall || [], group: dem.group || [] }, daysAgo(30)).map(([g, n]) => `<div>${n} · ${esc(g)}</div>`).join('') || 'Chưa có.';
 }

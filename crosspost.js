@@ -1,4 +1,4 @@
-import { groupKind, wallKind } from './count.js';
+import { groupRow, wallKind } from './count.js';
 
 export function captionKey(text) {
   return text.normalize('NFKC').replace(/\s+/g, ' ').trim();
@@ -33,7 +33,7 @@ export function crosspostStats(rows, wall, since, month = '') {
   let read = 0;
   for (const row of rows) {
     if (!row.day || row.day < since || (month && !row.day.startsWith(`${month}-`))) continue;
-    const { type, group } = groupKind(row.head, row.group);
+    const { type, group } = groupRow(row);
     if (type !== 'post') continue;
     if (row.postKey && seen.has(row.postKey)) continue;
     if (row.postKey) seen.add(row.postKey);

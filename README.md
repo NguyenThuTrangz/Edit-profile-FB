@@ -44,6 +44,7 @@ Lưu ý:
 - Hai cột đăng chéo có trong bảng, dữ liệu chép và CSV. Một bài có thể góp vào cả hai cột.
 - Extension mở một tab Facebook tạm thời để đọc các bài group có liên kết trực tiếp. Caption trống, bị rút gọn hoặc không đọc được sẽ thiếu dữ liệu đối chiếu. Lượt chia sẻ có thể thiếu nếu bài gốc nằm ngoài khoảng nhật ký tường đã quét hoặc Facebook không hiện liên kết nguồn.
 - Kết quả từ bản cũ hiện `—` ở các cột thiếu dữ liệu. Chạy lại **Đếm cả hai** bằng phiên bản 1.3.0 để cập nhật.
+- FB tiếng Việt ghi bài chia sẻ vào group chỉ bằng caption + “Nhóm công khai/Nhóm riêng tư”. Những dòng này được tính là bài group, tên group hiện dạng `nhóm <mã group>`. Bài đang chờ admin duyệt hiện riêng, chưa tính.
 - Chỉ đếm được **bài đã lên**. Bài đang chờ admin duyệt, bị từ chối hoặc đã xoá không nằm trong Nhật ký.
 - Nick nhiều bài (vài trăm bài/tháng) thì đếm mất vài phút. Để yên tab Facebook, không thu nhỏ cửa sổ. Bấm *Dừng* nếu cần; số tháng cũ nhất khi đó có thể thiếu.
 - Nick có địa chỉ dạng `profile.php?id=…`: Facebook bỏ qua bộ lọc mục, hiện cả lượt like nếu mở theo kiểu thường. Extension tự mở lại đúng mục, và **kiểm tên mục trước khi đếm**. Sai mục thì dừng, không đếm nhầm.

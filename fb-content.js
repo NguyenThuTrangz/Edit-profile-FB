@@ -131,17 +131,23 @@
     const st = window.__epfbLog, main = document.querySelector('[role="main"]') || document.body;
     const isView = e => /^(xem|view)$/i.test(clean(e.innerText));
     const out = [];
+    // Mỗi dòng nhật ký có đúng 1 giờ ("01:30"). Neo theo giờ, không theo nút Xem: dòng "X đã đăng trong <group>." không có nút Xem.
+    const TIME_RE = /^\d{1,2}:\d{2}( ?[ap]m)?$/i;
+    const timeLeaves = el => [...el.querySelectorAll('span,div,abbr')].filter(e => e.childElementCount === 0 && TIME_RE.test(clean(e.textContent)));
     const collect = () => {
       const heads = [...main.querySelectorAll('span,h2,h3,div')].filter(e => e.childElementCount === 0 && DATE_RE.test(clean(e.textContent)));
-      for (const v of main.querySelectorAll('a,[role="link"]')) {
-        if (st.seen.has(v) || !isView(v)) continue; st.seen.add(v);
-        let row = v; while (row.parentElement && row.parentElement !== main && [...row.parentElement.querySelectorAll('a,[role="link"]')].filter(isView).length === 1) row = row.parentElement;
-        const lines = row.innerText.split('\n').map(clean).filter(Boolean).filter(s => !/^(xem|view|·)$/i.test(s) && !DATE_RE.test(s));
+      for (const t of timeLeaves(main)) {
+        if (st.seen.has(t)) continue; st.seen.add(t);
+        let row = t; while (row.parentElement && row.parentElement !== main && timeLeaves(row.parentElement).length === 1) row = row.parentElement;
+        const lines = row.innerText.split('\n').map(clean).filter(Boolean).filter(s => !/^(xem|view|·)$/i.test(s) && !DATE_RE.test(s) && !TIME_RE.test(s));
         const audience = lines.find(s => /^(công khai|bạn bè|chỉ mình tôi|public|friends|only me|tùy chỉnh|custom|nhóm công khai|nhóm riêng tư|public group|private group)$/i.test(s)) || '';
-        let date = ''; for (const h of heads) if (h.compareDocumentPosition(v) & Node.DOCUMENT_POSITION_FOLLOWING) date = clean(h.textContent);
-        // tên group của dòng: chữ của link /groups/<id> (không phải nút Xem). Dòng "X shared a post." không ghi tên group trong câu.
-        const gl = [...row.querySelectorAll('a[href*="/groups/"]')].find(a => !isView(a) && clean(a.innerText) && !/\/(?:posts|permalink|user)\//.test(a.getAttribute('href') || ''));
-        out.push({ date, head: lines.find(s => s !== audience && !/^\d{1,2}:\d{2}( ?[ap]m)?$/i.test(s)) || '', audience, href: v.href || '', group: gl ? clean(gl.innerText).slice(0, 120) : '' });
+        let date = ''; for (const h of heads) if (h.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING) date = clean(h.textContent);
+        const v = [...row.querySelectorAll('a[href],[role="link"]')].find(isView);
+        const href = v?.href || '';
+        // tên group: chữ của link /groups/<id> (không phải nút Xem). Dòng chia sẻ chỉ ghi caption → lấy mã group từ link Xem.
+        const gl = [...row.querySelectorAll('a[href*="/groups/"]')].find(a => !isView(a) && clean(a.innerText) && !/\/(?:posts|permalink|user|pending_posts)\//.test(a.getAttribute('href') || ''));
+        const groupId = (href.match(/\/groups\/([^/?#]+)/) || [])[1] || '';
+        out.push({ date, head: lines.find(s => s !== audience) || '', audience, href, group: gl ? clean(gl.innerText).slice(0, 120) : '', groupId, pending: /\/pending_posts\//.test(href) });
       }
     };
     for (let i = 0; i < rounds; i++) {
