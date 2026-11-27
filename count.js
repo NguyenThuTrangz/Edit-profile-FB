@@ -56,19 +56,26 @@ export function groupKind(head, groupHint = '') {
 }
 
 const GROUP_AUDIENCE = /^(nhóm công khai|nhóm riêng tư|public group|private group)$/i;
-// Phân loại 1 dòng của mục group (dòng do fb-content.js đọc: head, audience, group, groupId, pending).
-// FB tiếng Việt hiện bài chia sẻ vào group chỉ bằng caption + "Nhóm công khai" + nút Xem tới /groups/<id>/permalink/…,
-// không có câu "đã chia sẻ". Dòng như vậy (không phải bình luận, có đối tượng là nhóm) là bài group, share = true.
-// Bài đang chờ admin duyệt (link /pending_posts/) chưa lên nên không tính.
+const SHARE_VERB = /\bshared\b|đã chia sẻ/i;
+// Phân loại 1 dòng của mục group. Dòng do fb-content.js đọc: head, audience, group, groupId, pending, view
+// (có nút Xem không); readGroupDetails thêm read, isShare, groupName sau khi mở bài.
+// FB tiếng Việt (kiểm trên FB thật 27/11/2026):
+// - Bài đã lên nhóm: dòng có nút Xem tới /groups/<id>/permalink/…, thường chỉ ghi caption + "Nhóm công khai".
+// - "X đã đăng trong <group>." KHÔNG có nút Xem (menu chỉ có Xóa) = bài chưa được duyệt → không tính.
+// - Link Xem tới /pending_posts/ = đang chờ duyệt → không tính.
+// kind: 'share' (bài chia sẻ, có bài gốc bên trong), 'own' (tự đăng, đã duyệt), 'unknown' (chưa mở được bài để biết).
 export function groupRow(r = {}) {
-  if (r.pending) return { type: 'pending', group: '' };
-  const hint = r.group || (r.groupId ? 'nhóm ' + r.groupId : '');
-  const g = groupKind(r.head, hint);
-  if (g.type === 'other' && GROUP_AUDIENCE.test(norm(r.audience)) && r.groupId) return { type: 'post', group: hint, share: true };
-  return g;
+  const hint = r.group || r.groupName || (r.groupId ? 'nhóm ' + r.groupId : '');
+  let g = groupKind(r.head, hint);
+  if (g.type === 'comment') return g;
+  if (r.pending || r.view === false) return { type: 'pending', group: '' };
+  if (g.type === 'other' && GROUP_AUDIENCE.test(norm(r.audience)) && r.groupId) g = { type: 'post', group: hint };
+  if (g.type !== 'post') return g;
+  const kind = r.read ? (r.isShare ? 'share' : 'own') : SHARE_VERB.test(norm(r.head)) ? 'share' : 'unknown';
+  return { ...g, kind };
 }
 
-// Danh sách bài group {day, group} từ cả hai mục. Bài tường chia sẻ vào group có thể hiện ở mục tường,
+// Danh sách bài group {day, group, kind} từ cả hai mục. Bài tường chia sẻ vào group có thể hiện ở mục tường,
 // mục group, hoặc cả hai: dòng ở mục tường chỉ được cộng khi mục group chưa có bài cùng ngày, cùng group.
 export function groupPostList({ wall = [], group = [] }, since = '') {
   const inRange = r => r.day && !(since && r.day < since);
@@ -77,22 +84,23 @@ export function groupPostList({ wall = [], group = [] }, since = '') {
     if (!inRange(r)) continue;
     const g = groupRow(r);
     if (g.type !== 'post') continue;
-    out.push({ day: r.day, group: g.group });
+    out.push({ day: r.day, group: g.group, kind: g.kind });
     const k = r.day + '|' + g.group.toLowerCase(); have.set(k, (have.get(k) || 0) + 1);
   }
   for (const r of wall) {
     if (!inRange(r) || wallKind(r.head, r.group) !== 'group') continue;
     const k = r.day + '|' + norm(r.group).toLowerCase();
     if (have.get(k)) { have.set(k, have.get(k) - 1); continue; }
-    out.push({ day: r.day, group: norm(r.group) });
+    out.push({ day: r.day, group: norm(r.group), kind: 'share' });
   }
   return out;
 }
 
-// rows: [{day:'2026-11-18', head, group}] → [{month, wall, profile, groupPosts, comments, groups}]
+const KEYS = ['wall', 'profile', 'groupPosts', 'groupShares', 'groupOwn', 'groupUnknown', 'comments', 'other'];
+// rows: [{day:'2026-11-18', head, group, …}] → [{month, wall, profile, groupPosts = groupShares + groupOwn + groupUnknown, comments, other, groups}]
 export function tally({ wall = [], group = [] }, since = '') {
   const by = new Map();
-  const get = m => { if (!by.has(m)) by.set(m, { month: m, wall: 0, profile: 0, groupPosts: 0, comments: 0, other: 0, groupSet: new Set() }); return by.get(m); };
+  const get = m => { if (!by.has(m)) by.set(m, { month: m, ...Object.fromEntries(KEYS.map(k => [k, 0])), groupSet: new Set() }); return by.get(m); };
   let undated = 0, pending = 0;
   for (const r of wall) {
     if (!r.day) { undated++; continue; } if (since && r.day < since) continue;
@@ -106,14 +114,15 @@ export function tally({ wall = [], group = [] }, since = '') {
     const x = get(r.day.slice(0, 7));
     if (g.type === 'comment') x.comments++; else if (g.type === 'other') x.other++;
   }
-  for (const p of groupPostList({ wall, group }, since)) { const x = get(p.day.slice(0, 7)); x.groupPosts++; x.groupSet.add(p.group); }
+  const field = { share: 'groupShares', own: 'groupOwn', unknown: 'groupUnknown' };
+  for (const p of groupPostList({ wall, group }, since)) { const x = get(p.day.slice(0, 7)); x.groupPosts++; x[field[p.kind]]++; x.groupSet.add(p.group); }
   const months = [...by.values()].sort((a, b) => b.month.localeCompare(a.month)).map(({ groupSet, ...x }) => ({ ...x, groups: groupSet.size }));
   return { months, undated, pending };
 }
 
 // Cộng dồn các tháng thành 1 dòng (vd "30 ngày gần nhất")
 export function sum(months) {
-  return months.reduce((a, m) => { for (const k of ['wall', 'profile', 'groupPosts', 'comments', 'other']) a[k] += m[k]; return a; }, { wall: 0, profile: 0, groupPosts: 0, comments: 0, other: 0 });
+  return months.reduce((a, m) => { for (const k of KEYS) a[k] += m[k] || 0; return a; }, Object.fromEntries(KEYS.map(k => [k, 0])));
 }
 
 // Bài group theo từng group (từ ngày `since`), nhiều nhất trước. Nhận {wall, group} hoặc mảng dòng group.

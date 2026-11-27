@@ -45,10 +45,11 @@
   const expand = async p => { const m = findBtn(/^(xem thêm|see more)$/i, p)[0]; if (m) { m.click(); await sleep(900); } };
 
   async function readGroupPost({ shared }) {
+    // Mở link bài group thì Facebook hiện bài trong hộp thoại, phía sau vẫn là bảng tin: lấy bài trong hộp thoại trước.
     const post = await wait(() => {
       assertNotBlocked();
       const main = document.querySelector('[role="main"]');
-      return main && all('[role="article"],div[aria-posinset]', main)[0];
+      return document.querySelector('[role="dialog"] [aria-posinset]') || (main && all('[role="article"],div[aria-posinset]', main)[0]);
     }, 4000, 'Không đọc được bài group');
     const message = msgEl(post);
     let caption = '';
@@ -61,7 +62,18 @@
       const article = link.closest('[role="article"]');
       return shared || (article && article !== post && post.contains(article));
     });
-    return { caption, sourceLinks: links.map(link => link.href) };
+    // Bài chia sẻ: trong thân bài (trước nút Thích, ngoài caption) có tên tác giả bài gốc, là link tới trang cá nhân / fanpage.
+    // Bài tự đăng chỉ có tên group và người đăng (link /groups/…). Đã kiểm trên FB thật 27/11/2026.
+    const like = post.querySelector('[data-ad-rendering-role="like_button"]');
+    const isShare = all('a[href]', post).some(a => {
+      if (like && !(a.compareDocumentPosition(like) & Node.DOCUMENT_POSITION_FOLLOWING)) return false;
+      if (a.closest('[data-ad-rendering-role="story_message"]') || !clean(a.innerText)) return false;
+      let u; try { u = new URL(a.href); } catch { return false; }
+      return /(^|\.)facebook\.com$/.test(u.host) && u.pathname !== '/' && !/^\/(groups|photo|photos|hashtag|watch|reel|events|stories)\b/.test(u.pathname);
+    });
+    // Tiêu đề tab: "<tên group> | <caption> | Facebook"
+    const groupName = clean(document.title.split(' | ')[0]).replace(/^\(\d+\)\s*/, '');
+    return { caption, sourceLinks: links.map(link => link.href), isShare, groupName: groupName && groupName !== 'Facebook' ? groupName : '' };
   }
 
   // ---------- Quét bài trên trang nick nguồn ----------

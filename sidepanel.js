@@ -254,7 +254,7 @@ async function countKind(kind, since) {
   while (!demStop) {
     const r = await send('logChunk', { reset, rounds: 6 }, tabId); reset = false;
     const now = new Date();
-    rows.push(...r.rows.map(x => ({ day: parseDay(x.date, now), head: x.head, href: x.href, group: x.group || '', audience: x.audience || '', groupId: x.groupId || '', pending: !!x.pending })));
+    rows.push(...r.rows.map(x => ({ day: parseDay(x.date, now), head: x.head, href: x.href, group: x.group || '', audience: x.audience || '', groupId: x.groupId || '', pending: !!x.pending, view: !!x.href })));
     const days = rows.map(x => x.day).filter(Boolean).sort(), oldest = days[0];
     log(`Đếm ${CAT[kind].name}: đã đọc ${rows.length} mục, tới ngày ${oldest || '?'}…`);
     if (r.end || (oldest && oldest < since)) break;
@@ -295,7 +295,7 @@ async function readGroupDetails(rows, since) {
           const digest = caption && await crypto.subtle.digest('SHA-256', new TextEncoder().encode(caption));
           const captionHash = digest ? Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('') : '';
           const sourceIds = [...new Set(post.sourceLinks.map(wallPostId).filter(Boolean))];
-          visited.set(url, { captionHash, sourceIds, read: true });
+          visited.set(url, { captionHash, sourceIds, read: true, isShare: !!post.isShare, groupName: post.groupName || '' });
         }
         Object.assign(row, visited.get(url));
       } catch (e) {
@@ -324,7 +324,8 @@ async function runCount(kinds) {
     renderCount(); log(demStop ? 'Đã dừng. Kết quả có thể chưa đầy đủ.' : '✅ Đếm xong.', demStop);
   } finally { counting = false; }
 }
-const COLS = [['wall', 'Bài tường'], ['groupPosts', 'Bài group'], ['groups', 'Số group khác nhau'], ['comments', 'Bình luận trong group'], ['profile', 'Cập nhật hồ sơ (không tính bài)'], ['crossposts', 'Bài trùng caption qua group'], ['wallShares', 'Chia sẻ từ tường vào group']];
+// Bài group (tổng) = Chia sẻ vào group + Tự đăng trên group (đã duyệt). Bài chưa duyệt không tính.
+const COLS = [['wall', 'Bài tường'], ['groupPosts', 'Bài group (tổng)'], ['groupShares', 'Chia sẻ vào group'], ['groupOwn', 'Tự đăng trên group (đã duyệt)'], ['groups', 'Số group khác nhau'], ['comments', 'Bình luận trong group'], ['profile', 'Cập nhật hồ sơ (không tính bài)'], ['crossposts', 'Bài trùng caption qua group']];
 function countTable() {
   const r = tally({ wall: dem.wall || [], group: dem.group || [] }, dem.since);
   const s30 = daysAgo(30), crossSince = dem.since > s30 ? dem.since : s30;
@@ -337,20 +338,21 @@ function countTable() {
   const na = k => (k === 'wall' || k === 'profile') ? !dem.wall : !dem.group;
   const cell = (x, k) => {
     if (k === 'crossposts' && !x.checked) return '—';
-    if (k === 'wallShares' && !(x.hasWallIds && x.read)) return '—';
     return na(k) ? '—' : x[k];
   };
-  return { rows, cell, undated: r.undated, pending: r.pending, other: sum(r.months).other };
+  const all = sum(r.months);
+  return { rows, cell, undated: r.undated, pending: r.pending, other: all.other, unknown: all.groupUnknown };
 }
 function renderCount() {
   if (!dem.wall && !dem.group) { $('#demOut').innerHTML = ''; return; }
-  const { rows, cell, undated, pending, other } = countTable();
+  const { rows, cell, undated, pending, other, unknown } = countTable();
   $('#demOut').innerHTML = `<p><b>${esc(dem.name)}</b> · từ ${esc(dem.since)} · đếm lúc ${esc(dem.at.slice(0, 16).replace('T', ' '))}</p>
     <div class="table-scroll"><table><tr><td><b>Tháng</b></td>${COLS.map(([, h]) => `<td><b>${h}</b></td>`).join('')}</tr>
     ${rows.map(x => `<tr><td>${esc(x.month)}</td>${COLS.map(([k]) => `<td>${cell(x, k)}</td>`).join('')}</tr>`).join('')}</table></div>
-    ${dem.group ? `<p class="muted">Trong dòng 30 ngày, đọc được ${rows[0].read}/${rows[0].posts} bài group và ${rows[0].checked} caption. Dấu — nghĩa là thiếu dữ liệu để tính. Dùng “Đếm cả hai” để đối chiếu bài chia sẻ với bài gốc.</p>` : ''}
+    ${dem.group ? `<p class="muted">Bài group (tổng) = Chia sẻ vào group + Tự đăng (đã duyệt). Dòng 30 ngày: mở được ${rows[0].read}/${rows[0].posts} bài group để phân loại. Dấu — nghĩa là thiếu dữ liệu.</p>` : ''}
     ${undated ? `<div class="warn">⚠ ${undated} mục không đọc được ngày (không tính).</div>` : ''}
-    ${pending ? `<div class="muted">${pending} bài group đang chờ admin duyệt (chưa tính, duyệt xong đếm lại).</div>` : ''}
+    ${pending ? `<div class="muted">${pending} bài group chưa được duyệt / đang chờ duyệt (không tính, duyệt xong đếm lại).</div>` : ''}
+    ${unknown ? `<div class="warn">⚠ ${unknown} bài group không mở được để biết là chia sẻ hay tự đăng: có trong tổng, chưa vào cột nào. Đếm lại để thử mở lại.</div>` : ''}
     ${other ? `<div class="warn">⚠ ${other} mục trong mục group không nhận ra là bài hay bình luận (không tính) — báo người làm extension.</div>` : ''}`;
   $('#demGroups').innerHTML = byGroup({ wall: dem.wall || [], group: dem.group || [] }, daysAgo(30)).map(([g, n]) => `<div>${n} · ${esc(g)}</div>`).join('') || 'Chưa có.';
 }
