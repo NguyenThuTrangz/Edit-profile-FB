@@ -34,10 +34,16 @@ Mục đích: Sale không phải tự đếm tay bài đã đăng (tường + gr
 | Bài group | Bài đăng vào group (“posted in …” / “đã đăng trong …”), kể cả bài tường **chia sẻ vào group** (“shared a post in/to …” / “đã chia sẻ … vào nhóm …”). Mỗi group được chia sẻ tính 1 bài; bài gốc trên tường vẫn tính 1 bài tường |
 | Số group khác nhau | Bao nhiêu group khác nhau đã đăng |
 | Bình luận trong group | Bình luận, trả lời trong group (không cộng vào bài) |
+| Bài trùng caption qua group | Số bài có cùng caption sau khi chuẩn hoá khoảng trắng, xuất hiện ở ít nhất hai group trong kỳ. Ví dụ cùng một caption đăng vào ba group được tính ba bài. |
+| Chia sẻ từ tường vào group | Số bài group có liên kết nguồn khớp với bài tường trong nhật ký đã quét của nick. Chọn **Đếm cả hai** để đối chiếu. |
 
 6. **Chép bảng** rồi dán vào Google Sheet, hoặc **Tải file CSV**. Danh sách bài theo từng group (30 ngày) nằm ở mục xổ xuống bên dưới bảng.
 
 Lưu ý:
+
+- Hai cột đăng chéo có trong bảng, dữ liệu chép và CSV. Một bài có thể góp vào cả hai cột.
+- Extension mở một tab Facebook tạm thời để đọc các bài group có liên kết trực tiếp. Caption trống, bị rút gọn hoặc không đọc được sẽ thiếu dữ liệu đối chiếu. Lượt chia sẻ có thể thiếu nếu bài gốc nằm ngoài khoảng nhật ký tường đã quét hoặc Facebook không hiện liên kết nguồn.
+- Kết quả từ bản cũ hiện `—` ở các cột thiếu dữ liệu. Chạy lại **Đếm cả hai** bằng phiên bản 1.3.0 để cập nhật.
 - Chỉ đếm được **bài đã lên**. Bài đang chờ admin duyệt, bị từ chối hoặc đã xoá không nằm trong Nhật ký.
 - Nick nhiều bài (vài trăm bài/tháng) thì đếm mất vài phút. Để yên tab Facebook, không thu nhỏ cửa sổ. Bấm *Dừng* nếu cần; số tháng cũ nhất khi đó có thể thiếu.
 - Nick có địa chỉ dạng `profile.php?id=…`: Facebook bỏ qua bộ lọc mục, hiện cả lượt like nếu mở theo kiểu thường. Extension tự mở lại đúng mục, và **kiểm tên mục trước khi đếm**. Sai mục thì dừng, không đếm nhầm.
