@@ -253,7 +253,7 @@ async function countKind(kind, since) {
   while (!demStop) {
     const r = await send('logChunk', { reset, rounds: 6 }); reset = false;
     const now = new Date();
-    rows.push(...r.rows.map(x => ({ day: parseDay(x.date, now), head: x.head })));
+    rows.push(...r.rows.map(x => ({ day: parseDay(x.date, now), head: x.head, group: x.group || '' })));
     const days = rows.map(x => x.day).filter(Boolean).sort(), oldest = days[0];
     log(`Đếm ${CAT[kind].name}: đã đọc ${rows.length} mục, tới ngày ${oldest || '?'}…`);
     if (r.end || (oldest && oldest < since)) break;
@@ -275,7 +275,7 @@ const COLS = [['wall', 'Bài tường'], ['groupPosts', 'Bài group'], ['groups'
 function countTable() {
   const r = tally({ wall: dem.wall || [], group: dem.group || [] }, dem.since);
   const s30 = daysAgo(30), last30 = tally({ wall: dem.wall || [], group: dem.group || [] }, s30);
-  const t30 = { month: `30 ngày (${s30} → nay)`, ...sum(last30.months), groups: byGroup(dem.group || [], s30).length };
+  const t30 = { month: `30 ngày (${s30} → nay)`, ...sum(last30.months), groups: byGroup({ wall: dem.wall || [], group: dem.group || [] }, s30).length };
   const rows = [t30, ...r.months];
   const na = k => (k === 'wall' || k === 'profile') ? !dem.wall : !dem.group;
   return { rows, cell: (x, k) => na(k) ? '—' : x[k], undated: r.undated, other: sum(r.months).other };
@@ -288,7 +288,7 @@ function renderCount() {
     ${rows.map(x => `<tr><td>${esc(x.month)}</td>${COLS.map(([k]) => `<td>${cell(x, k)}</td>`).join('')}</tr>`).join('')}</table>
     ${undated ? `<div class="warn">⚠ ${undated} mục không đọc được ngày (không tính).</div>` : ''}
     ${other ? `<div class="warn">⚠ ${other} mục trong mục group không nhận ra là bài hay bình luận (không tính) — báo người làm extension.</div>` : ''}`;
-  $('#demGroups').innerHTML = byGroup(dem.group || [], daysAgo(30)).map(([g, n]) => `<div>${n} · ${esc(g)}</div>`).join('') || 'Chưa có.';
+  $('#demGroups').innerHTML = byGroup({ wall: dem.wall || [], group: dem.group || [] }, daysAgo(30)).map(([g, n]) => `<div>${n} · ${esc(g)}</div>`).join('') || 'Chưa có.';
 }
 const countTsv = sep => { const { rows, cell } = countTable(); const q = v => sep === ',' ? `"${String(v).replace(/"/g, '""')}"` : String(v);
   return [['Nick', 'Tháng', ...COLS.map(c => c[1])], ...rows.map(x => [dem.name, x.month, ...COLS.map(([k]) => cell(x, k))])].map(r => r.map(q).join(sep)).join('\n'); };

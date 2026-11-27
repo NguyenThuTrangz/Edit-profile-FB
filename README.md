@@ -31,7 +31,7 @@ Mục đích: Sale không phải tự đếm tay bài đã đăng (tường + gr
 | Cột | Nghĩa |
 |---|---|
 | Bài tường | Bài đăng lên trang cá nhân (ảnh, trạng thái, chia sẻ). Không tính đổi ảnh đại diện / ảnh bìa / sự kiện trong đời / tiểu sử (để riêng cột *Cập nhật hồ sơ*) |
-| Bài group | Bài đăng vào group (“posted in …” / “đã đăng trong …”) |
+| Bài group | Bài đăng vào group (“posted in …” / “đã đăng trong …”), kể cả bài tường **chia sẻ vào group** (“shared a post in/to …” / “đã chia sẻ … vào nhóm …”). Mỗi group được chia sẻ tính 1 bài; bài gốc trên tường vẫn tính 1 bài tường |
 | Số group khác nhau | Bao nhiêu group khác nhau đã đăng |
 | Bình luận trong group | Bình luận, trả lời trong group (không cộng vào bài) |
 

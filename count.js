@@ -21,36 +21,77 @@ export function parseDay(s, now = new Date()) {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-// Dòng ở mục "Bài viết, ảnh và video của bạn": bài thật hay chỉ là cập nhật hồ sơ
-export function wallKind(head) {
-  const h = String(head || '');
+const norm = s => String(s || '').replace(/\s+/g, ' ').trim();
+const COMMENT_RE = /\b(?:commented|replied|reacted)\b|đã (?:bình luận|trả lời|phản hồi|bày tỏ cảm xúc)/i;
+// "posted in G" · "shared a post in G" · "shared Lily's post to G" · "shared to G" · "added 3 photos to G"
+const POST_EN = /\b(?:posted|shared|added|wrote|created)\b.*?\b(?:in|to)\s+(.+?)\.?$/i;
+// "đã đăng trong G" · "đã chia sẻ bài viết vào nhóm G" · "đã chia sẻ một bài viết trong G" · "đã thêm 3 ảnh vào G"
+const POST_VI = /đã (?:đăng|chia sẻ|thêm|viết|tạo)(?:.*?\s|\s)(?:trong|lên|vào|tại|với)(?: nhóm)?\s+(.+?)\.?$/i;
+const POST_VERB = /\b(?:posted|shared|added|wrote|created|updated)\b|đã (?:đăng|chia sẻ|thêm|viết|tạo|cập nhật)/i;
+
+// Dòng ở mục "Bài viết, ảnh và video của bạn": bài thật, cập nhật hồ sơ, hay bài tường chia sẻ vào group.
+// groupHint = chữ của link /groups/ trong dòng (fb-content.js lấy). Chỉ coi là 'group' khi chữ đầu dòng
+// nêu đúng group đó ("shared a post to <group>"), để "shared Lan's post." (chia sẻ bài group về tường) vẫn là bài tường.
+export function wallKind(head, groupHint = '') {
+  const h = norm(head);
   if (/ảnh đại diện|ảnh bìa|profile picture|cover photo|sự kiện trong đời|life event|tiểu sử|\bbio\b|avatar|khung ảnh|frame/i.test(h)) return 'profile';
+  const hint = norm(groupHint).toLowerCase();
+  if (hint && !COMMENT_RE.test(h)) {
+    const r = h.match(POST_EN) || h.match(POST_VI);
+    if (r && r[1].toLowerCase().includes(hint)) return 'group';
+  }
   return 'post';
 }
 
-// Dòng ở mục "Bài viết và bình luận trong nhóm": đăng bài / bình luận, tên group
-export function groupKind(head) {
-  const h = String(head || '').replace(/\s+/g, ' ').trim();
-  let r = h.match(/(?:posted in|shared .*? to|đã đăng(?: bài)? trong(?: nhóm)?|đã chia sẻ .*? (?:lên|vào|trong)(?: nhóm)?)\s+(.+?)\.?$/i);
-  if (r) return { type: 'post', group: r[1].trim() };
-  if (/commented|replied|bình luận|trả lời|phản hồi/i.test(h)) return { type: 'comment', group: '' };
+// Dòng ở mục "Bài viết và bình luận trong nhóm": đăng bài / chia sẻ / bình luận, tên group.
+// Bình luận xét trước: "commented on a post shared to G" là bình luận, không phải bài.
+export function groupKind(head, groupHint = '') {
+  const h = norm(head), hint = norm(groupHint);
+  if (COMMENT_RE.test(h)) return { type: 'comment', group: '' };
+  const r = h.match(POST_EN) || h.match(POST_VI);
+  if (r) return { type: 'post', group: hint || r[1].trim() };
+  // "Lily shared a post." / "Lily đã chia sẻ một liên kết." — tên group không nằm trong câu, lấy từ link group của dòng
+  if (POST_VERB.test(h)) return { type: 'post', group: hint || '(không rõ group)' };
   return { type: 'other', group: '' };
 }
 
-// rows: [{day:'2026-11-18', head, audience}] → [{month, wall, profile, groupPosts, comments, groups}]
+// Danh sách bài group {day, group} từ cả hai mục. Bài tường chia sẻ vào group có thể hiện ở mục tường,
+// mục group, hoặc cả hai: dòng ở mục tường chỉ được cộng khi mục group chưa có bài cùng ngày, cùng group.
+export function groupPostList({ wall = [], group = [] }, since = '') {
+  const inRange = r => r.day && !(since && r.day < since);
+  const out = [], have = new Map();
+  for (const r of group) {
+    if (!inRange(r)) continue;
+    const g = groupKind(r.head, r.group);
+    if (g.type !== 'post') continue;
+    out.push({ day: r.day, group: g.group });
+    const k = r.day + '|' + g.group.toLowerCase(); have.set(k, (have.get(k) || 0) + 1);
+  }
+  for (const r of wall) {
+    if (!inRange(r) || wallKind(r.head, r.group) !== 'group') continue;
+    const k = r.day + '|' + norm(r.group).toLowerCase();
+    if (have.get(k)) { have.set(k, have.get(k) - 1); continue; }
+    out.push({ day: r.day, group: norm(r.group) });
+  }
+  return out;
+}
+
+// rows: [{day:'2026-11-18', head, group}] → [{month, wall, profile, groupPosts, comments, groups}]
 export function tally({ wall = [], group = [] }, since = '') {
   const by = new Map();
   const get = m => { if (!by.has(m)) by.set(m, { month: m, wall: 0, profile: 0, groupPosts: 0, comments: 0, other: 0, groupSet: new Set() }); return by.get(m); };
   let undated = 0;
   for (const r of wall) {
     if (!r.day) { undated++; continue; } if (since && r.day < since) continue;
-    const x = get(r.day.slice(0, 7)); wallKind(r.head) === 'profile' ? x.profile++ : x.wall++;
+    const k = wallKind(r.head, r.group);
+    if (k === 'profile') get(r.day.slice(0, 7)).profile++; else if (k === 'post') get(r.day.slice(0, 7)).wall++;
   }
   for (const r of group) {
     if (!r.day) { undated++; continue; } if (since && r.day < since) continue;
-    const g = groupKind(r.head), x = get(r.day.slice(0, 7));
-    if (g.type === 'post') { x.groupPosts++; x.groupSet.add(g.group); } else if (g.type === 'comment') x.comments++; else x.other++;
+    const g = groupKind(r.head, r.group), x = get(r.day.slice(0, 7));
+    if (g.type === 'comment') x.comments++; else if (g.type === 'other') x.other++;
   }
+  for (const p of groupPostList({ wall, group }, since)) { const x = get(p.day.slice(0, 7)); x.groupPosts++; x.groupSet.add(p.group); }
   const months = [...by.values()].sort((a, b) => b.month.localeCompare(a.month)).map(({ groupSet, ...x }) => ({ ...x, groups: groupSet.size }));
   return { months, undated };
 }
@@ -60,10 +101,10 @@ export function sum(months) {
   return months.reduce((a, m) => { for (const k of ['wall', 'profile', 'groupPosts', 'comments', 'other']) a[k] += m[k]; return a; }, { wall: 0, profile: 0, groupPosts: 0, comments: 0, other: 0 });
 }
 
-// Bài group theo từng group (từ ngày `since`), nhiều nhất trước
-export function byGroup(group, since = '') {
+// Bài group theo từng group (từ ngày `since`), nhiều nhất trước. Nhận {wall, group} hoặc mảng dòng group.
+export function byGroup(rows, since = '') {
   const c = new Map();
-  for (const r of group) { if (!r.day || (since && r.day < since)) continue; const g = groupKind(r.head); if (g.type === 'post') c.set(g.group, (c.get(g.group) || 0) + 1); }
+  for (const p of groupPostList(Array.isArray(rows) ? { group: rows } : rows, since)) c.set(p.group, (c.get(p.group) || 0) + 1);
   return [...c.entries()].sort((a, b) => b[1] - a[1]);
 }
 

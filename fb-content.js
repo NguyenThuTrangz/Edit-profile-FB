@@ -119,7 +119,9 @@
         const lines = row.innerText.split('\n').map(clean).filter(Boolean).filter(s => !/^(xem|view|·)$/i.test(s) && !DATE_RE.test(s));
         const audience = lines.find(s => /^(công khai|bạn bè|chỉ mình tôi|public|friends|only me|tùy chỉnh|custom|nhóm công khai|nhóm riêng tư|public group|private group)$/i.test(s)) || '';
         let date = ''; for (const h of heads) if (h.compareDocumentPosition(v) & Node.DOCUMENT_POSITION_FOLLOWING) date = clean(h.textContent);
-        out.push({ date, head: (lines.find(s => s !== audience && !/^\d{1,2}:\d{2}( ?[ap]m)?$/i.test(s)) || '').slice(0, 200), audience });
+        // tên group của dòng: chữ của link /groups/<id> (không phải nút Xem). Dòng "X shared a post." không ghi tên group trong câu.
+        const gl = [...row.querySelectorAll('a[href*="/groups/"]')].find(a => !isView(a) && clean(a.innerText) && !/\/(?:posts|permalink|user)\//.test(a.getAttribute('href') || ''));
+        out.push({ date, head: (lines.find(s => s !== audience && !/^\d{1,2}:\d{2}( ?[ap]m)?$/i.test(s)) || '').slice(0, 200), audience, group: gl ? clean(gl.innerText).slice(0, 120) : '' });
       }
     };
     for (let i = 0; i < rounds; i++) {

@@ -52,3 +52,54 @@ test('cộng dồn và đếm theo group', async () => {
   assert.deepEqual(sum([{ wall: 1, profile: 0, groupPosts: 2, comments: 1, other: 0 }, { wall: 2, profile: 1, groupPosts: 0, comments: 0, other: 1 }]), { wall: 3, profile: 1, groupPosts: 2, comments: 1, other: 1 });
   assert.deepEqual(byGroup([{ day: '2026-11-18', head: 'X posted in A.' }, { day: '2026-11-17', head: 'X posted in A.' }, { day: '2026-11-17', head: 'X posted in B.' }, { day: '2026-01-01', head: 'X posted in C.' }], '2026-10-01'), [['A', 2], ['B', 1]]);
 });
+
+test('bài tường chia sẻ vào group (mục group) được tính là bài group', async () => {
+  const { groupKind } = await import('../count.js');
+  // FB tiếng Anh
+  assert.deepEqual(groupKind('Lily Smocking shared a post in SMOCK DRESS FOR SALE UK.'), { type: 'post', group: 'SMOCK DRESS FOR SALE UK' });
+  assert.deepEqual(groupKind("Lily Smocking shared Lily Smocking's post to Smocks for sale."), { type: 'post', group: 'Smocks for sale' });
+  assert.deepEqual(groupKind('Lily Smocking shared to Smocked Dresses Mums.'), { type: 'post', group: 'Smocked Dresses Mums' });
+  assert.deepEqual(groupKind('Lily Smocking shared a link in Smocks in UK.'), { type: 'post', group: 'Smocks in UK' });
+  // tên group không có trong câu → lấy từ link group của dòng
+  assert.deepEqual(groupKind('Lily Smocking shared a post.', 'Smocks for sale'), { type: 'post', group: 'Smocks for sale' });
+  assert.deepEqual(groupKind('Lily Smocking shared a post.'), { type: 'post', group: '(không rõ group)' });
+  // FB tiếng Việt
+  assert.deepEqual(groupKind('Rosie Smocking đã chia sẻ bài viết vào nhóm Smocks for sale.'), { type: 'post', group: 'Smocks for sale' });
+  assert.deepEqual(groupKind('Rosie Smocking đã chia sẻ một bài viết trong Smocks for sale.'), { type: 'post', group: 'Smocks for sale' });
+  assert.deepEqual(groupKind('Rosie Smocking đã chia sẻ một liên kết.', 'Smocks for sale'), { type: 'post', group: 'Smocks for sale' });
+  // bình luận dưới bài đã chia sẻ vẫn là bình luận
+  assert.equal(groupKind('Lily Smocking commented on a post shared to Smocks for sale.').type, 'comment');
+  assert.equal(groupKind('Rosie Smocking đã bình luận về bài viết được chia sẻ trong Smocks for sale.').type, 'comment');
+  // link group được ưu tiên hơn chữ trong câu
+  assert.equal(groupKind('Lily shared a post in Smocks in UK.', 'Smocks in UK').group, 'Smocks in UK');
+});
+
+test('mục tường: dòng chia sẻ vào group không cộng vào bài tường', async () => {
+  const { wallKind } = await import('../count.js');
+  assert.equal(wallKind('Lily Smocking shared a post to Smocks for sale.', 'Smocks for sale'), 'group');
+  assert.equal(wallKind('Lily Smocking đã chia sẻ bài viết vào nhóm Smocks for sale.', 'Smocks for sale'), 'group');
+  // chia sẻ bài của group về tường mình → vẫn là bài tường
+  assert.equal(wallKind("Lily Smocking shared Lan's post.", 'Smocks for sale'), 'post');
+  // không có link group → không đoán
+  assert.equal(wallKind('Lily Smocking shared a memory to her story.'), 'post');
+  assert.equal(wallKind('Lily Smocking added 4 new photos.'), 'post');
+});
+
+test('1 bài tường chia sẻ vào 3 group: 1 bài tường + 3 bài group, không đếm trùng', async () => {
+  const { tally, byGroup } = await import('../count.js');
+  const wall = [
+    { day: '2026-11-20', head: 'Lily Smocking added 4 new photos.' },
+    { day: '2026-11-20', head: 'Lily Smocking shared a post to Smocks A.', group: 'Smocks A' }, // cũng có ở mục group → bỏ
+    { day: '2026-11-20', head: 'Lily Smocking shared a post to Smocks C.', group: 'Smocks C' }  // chỉ có ở mục tường → cộng
+  ];
+  const group = [
+    { day: '2026-11-20', head: 'Lily Smocking shared a post.', group: 'Smocks A' },
+    { day: '2026-11-20', head: 'Lily Smocking shared a post in Smocks B.' },
+    { day: '2026-11-21', head: 'Lily Smocking commented on a post in Smocks B.' }
+  ];
+  const r = tally({ wall, group }, '2026-11-01');
+  assert.deepEqual(r.months, [{ month: '2026-11', wall: 1, profile: 0, groupPosts: 3, comments: 1, other: 0, groups: 3 }]);
+  assert.deepEqual(byGroup({ wall, group }, '2026-11-01').map(x => x[0]).sort(), ['Smocks A', 'Smocks B', 'Smocks C']);
+  // kết quả lưu từ bản cũ (không có trường group) vẫn đếm được
+  assert.equal(tally({ group: [{ day: '2026-11-20', head: 'X shared a post in Smocks B.' }] }).months[0].groupPosts, 1);
+});
